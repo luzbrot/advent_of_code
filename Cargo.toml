@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.0.29", features = ["derive"] }
+enum-iterator = "1.2.0"
