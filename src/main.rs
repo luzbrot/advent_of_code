@@ -1,10 +1,5 @@
 use clap::Parser;
-use enum_iterator::{all, Sequence};
-use std::{
-    fs,
-    cmp::Ordering,
-    convert::Into
-};
+use std::fs;
 
 
 /// CLI Input
@@ -16,148 +11,76 @@ struct Args {
     test: bool,
 }
 
-
-/// Enum of the selection on can make in Rock Paper Scissors
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Sequence)]
-enum Selection {
-    Rock,
-    Paper,
-    Scissors
+/// A Item in a rucksack.
+/// Just a renamed char.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Item(char);
+/// To be able to convert from char to Item
+impl From<char> for Item {
+    fn from(c: char) -> Self {
+        Self(c)
+    }
 }
-/// Implementation to convert Selection to numbers like defined
-impl From<Selection> for u32 {
-    fn from(s: Selection) -> Self {
-        match s {
-            Selection::Rock => 1,
-            Selection::Paper => 2,
-            Selection::Scissors => 3
+/// Convert to priority number for an item
+impl From<Item> for u32 {
+    fn from(i: Item) -> Self {
+        let uc = i.0 as u32;
+        if uc >= 97 {
+            uc - 97 + 1
         }
-    }
-}
-/// Convert to Selection from string for Part one and two
-impl From<&str> for Selection {
-    fn from(s: &str) -> Self {
-        match s {
-            "A" | "X" => Self::Rock,
-            "B" | "Y" => Self::Paper,
-            "C" | "Z" => Self::Scissors,
-            _ => panic!("No conversion from {}", s)
-        }
-    }
-}
-/// Needed for Ord
-impl PartialOrd for Selection {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-/// Implement ordering depending on who wins seen from Self
-/// Less => Lose
-/// Equal => Draw
-/// Greater => Win
-impl Ord for Selection {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self {
-            Self::Rock => {
-                match other {
-                    Self::Rock => Ordering::Equal,
-                    Self::Paper => Ordering::Less,
-                    Self::Scissors => Ordering::Greater
-                }
-            },
-            Self::Paper =>  {
-                match other {
-                    Self::Rock => Ordering::Greater,
-                    Self::Paper => Ordering::Equal,
-                    Self::Scissors => Ordering::Less
-                }
-            },
-            Self::Scissors => {
-                match other {
-                    Self::Rock => Ordering::Less,
-                    Self::Paper => Ordering::Greater,
-                    Self::Scissors => Ordering::Equal
-                }
-            }
+        else {
+            uc - 65 + 27
         }
     }
 }
 
-/// Wanted result for the second part of the challenge
+/// A rucksack with both compartments
 #[derive(Debug)]
-enum ExpectedResult {
-    Lose,
-    Draw,
-    Win
+struct Rucksack {
+    /// First compartment
+    first: Vec<Item>,
+    /// Second compartment
+    second: Vec<Item>
 }
-/// Convert ExpectedResult from string
-impl From<&str> for ExpectedResult {
-    fn from(s: &str) -> Self {
-        match s {
-            "X" => Self::Lose,
-            "Y" => Self::Draw,
-            "Z" => Self::Win,
-            _ => panic!("No conversion from {}", s)
-        }
-    }
-}
-
-// Save information of a math of part one and part two
-#[derive(Debug)]
-struct Match {
-    // Selection for the opponent
-    opponent: Selection,
-    // Selection of the reader
-    you: Selection,
-    // The wanted result for the second part of the challenge
-    wanted_result: ExpectedResult
-}
-impl Match {
-    /// Create a new Match from a line from the input
+impl Rucksack {
+    /// Create a new rucksack from a input line.
+    /// The input gets cut in the middle and put into `first` and `second` and converted to items.
     /// 
     /// # Arguments
-    /// * `s` - The line of a match parted with ' ' (e.g.: 'A X')
+    /// * `s` - The input line from the puzzle input
     fn new(s: &str) -> Self {
-        let mut parts = s.split(' ');
-        // We do expect 2 inputs otherwise the data is malformed
-        let first = parts.next().unwrap();
-        let second = parts.next().unwrap();
+        let len = s.len();
+        let items: Vec<Item> = s.chars().into_iter().map(Item).collect();
         Self {
-            opponent: first.into(),
-            you: second.into(),
-            wanted_result: second.into()
+            first: items[0..len/2].to_vec(),
+            second: items[len/2..].to_vec()
         }
     }
-    /// Checks if the match would be won
-    /// 
-    /// # Returns
-    /// True if match would be won
-    fn do_you_win(&self) -> bool {
-        self.you > self.opponent
+    /// Find the duplicate in both compartments.
+    /// There should only be one so only one is searched.
+    fn get_duplicate(&self) -> Item {
+        // If unwarp does not work the input is malformed
+        *self.first.iter().find(|el| self.second.iter().any(|e| &e == el)).unwrap()
     }
-    /// Sets `self.you` depending on the wanted result.
-    /// 
-    /// This works by iterating through all possible selections finding the one fulfilling the win requirement.
-    fn correct_your_selection(&mut self) {
-        self.you = match self.wanted_result {
-            ExpectedResult::Lose => {
-                all::<Selection>().find(|el| el < &self.opponent).unwrap()
-            },
-            ExpectedResult::Draw => {
-                all::<Selection>().find(|el| el == &self.opponent).unwrap()
-            },
-            ExpectedResult::Win => {
-                all::<Selection>().find(|el| el > &self.opponent).unwrap()
-            }
-        }
+    /// Find the duplicate and convert it to priority.
+    fn get_duplicate_priority(&self) -> u32 {
+        self.get_duplicate().into()
     }
-}
-/// Implementation to convert a Match to numbers like defined
-impl From<&Match> for u32 {
-    fn from(m: &Match) -> Self {
-        let mut points: u32 = m.you.into();
-        points += if m.do_you_win() { 6 } else if m.opponent == m.you { 3 } else { 0 };
-        points
+    /// Find the token shared between a group of three.
+    /// 
+    /// # Arguments
+    /// * `second` - The second rucksack in the group
+    /// * `third` - The third rucksack in the group
+    fn find_token(&self, second: &Rucksack, third: &Rucksack) -> Item {
+        let mut iter_first = self.first.iter().chain(self.second.iter());
+        let iter_second = second.first.iter().chain(second.second.iter());
+        let iter_third = third.first.iter().chain(third.second.iter());
+        // Unwrap is ok as the input is malformed otherwise
+        *iter_first.find(|el| iter_second.clone().any(|e| &e == el) && iter_third.clone().any(|e| &e == el)).unwrap()
+    }
+    /// Find the token and convert it to priority
+    fn get_token_priority(&self, second: &Rucksack, third: &Rucksack) -> u32 {
+        self.find_token(second, third).into()
     }
 }
 
@@ -168,16 +91,27 @@ fn main() {
 
     let input = fs::read_to_string(file).unwrap_or_else(|_| panic!("Unable to read {}", file));
 
-    let mut matches: Vec<Match> = Vec::new();
+    let mut rucksacks: Vec<Rucksack> = Vec::new();
 
-    for m in input.split('\n') {
-        matches.push(Match::new(m));
+    for r in input.split('\n') {
+        rucksacks.push(Rucksack::new(r));
     }
 
-    let mut points: u32 = matches.iter().map(|el| -> u32 {el.into()}).sum();
-    println!("The total score is: {}", points);
+    let priority_sum: u32 = rucksacks.iter().map(|el| el.get_duplicate_priority()).sum();
+    println!("The sum of the priorities of the duplicate items is: {:?}", priority_sum);
 
-    matches.iter_mut().for_each(|el| el.correct_your_selection());
-    points = matches.iter().map(|el| -> u32 {el.into()}).sum();
-    println!("The corrected total score is: {}", points);
+    let mut iter = rucksacks.iter().peekable();
+    let mut tokens: Vec<u32> = Vec::new();
+    loop {
+        if iter.peek().is_none() {
+            break;
+        }
+        // Unwrap ok as otherwise the input data is malformed
+        let first = iter.next().unwrap();
+        let second = iter.next().unwrap();
+        let third = iter.next().unwrap();
+        tokens.push(first.get_token_priority(second, third));
+    }
+
+    println!("The sum of the priorities of the badges is: {:?}", tokens.iter().sum::<u32>());
 }
