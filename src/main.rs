@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::fs;
+use std::{fs, ops::{Deref, DerefMut}};
 
 
 /// CLI Input
@@ -11,76 +11,70 @@ struct Args {
     test: bool,
 }
 
-/// A Item in a rucksack.
-/// Just a renamed char.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Item(char);
-/// To be able to convert from char to Item
-impl From<char> for Item {
-    fn from(c: char) -> Self {
-        Self(c)
+
+/// Rename std::ops::Range<u32> to impl traits and new functions for it
+#[derive(Debug)]
+struct Range(std::ops::Range<u32>);
+impl Range {
+    /// Create a new Range from the input part.
+    /// Gets split on '-' and used as start and end.
+    /// 
+    /// # Arguments
+    /// * `s` - The part of the input string
+    fn new(s: &str) -> Self {
+        let mut parts = s.split('-');
+        Self(std::ops::Range{
+            start: parts.next().unwrap().parse::<u32>().unwrap(), // Just unwrap as there is an error the input is malformed
+            end: parts.next().unwrap().parse::<u32>().unwrap() + 1 // We need to add one as the range is defined as exclusive
+        })
     }
 }
-/// Convert to priority number for an item
-impl From<Item> for u32 {
-    fn from(i: Item) -> Self {
-        let uc = i.0 as u32;
-        if uc >= 97 {
-            uc - 97 + 1
-        }
-        else {
-            uc - 65 + 27
-        }
+impl Range {
+    /// Checks if the other range is contained in this range
+    /// 
+    /// # Arguments
+    /// * `other` - The other range to check for
+    fn contains_range(&self, other: &Self) -> bool {
+        let end = other.end - 1; // -1 as we added +1 because exclusive end
+        self.contains(&other.start) && self.contains(&end)
     }
+    /// Checks if this other range is overlapped by the other range
+    /// 
+    /// # Arguments
+    /// * `other` - The other range to check for
+    fn partially_contains_range(&self, other: &Self) -> bool {
+        let end = other.end - 1; // -1 as we added +1 because exclusive end
+        self.contains(&other.start) || self.contains(&end)
+    }
+}
+/// Impl Deref to use Range as std::ops::Range
+impl Deref for Range {
+    type Target = std::ops::Range<u32>;
+    fn deref(&self) -> &std::ops::Range<u32> { &self.0 }
+}
+impl DerefMut for Range {
+    fn deref_mut(&mut self) -> &mut std::ops::Range<u32> { &mut self.0 }
 }
 
-/// A rucksack with both compartments
+/// A Pair of two ranges from the assignment.
 #[derive(Debug)]
-struct Rucksack {
-    /// First compartment
-    first: Vec<Item>,
-    /// Second compartment
-    second: Vec<Item>
-}
-impl Rucksack {
-    /// Create a new rucksack from a input line.
-    /// The input gets cut in the middle and put into `first` and `second` and converted to items.
+struct Pair(Range, Range);
+impl Pair {
+    /// Create a new assignment pair from the input.
     /// 
     /// # Arguments
-    /// * `s` - The input line from the puzzle input
+    /// * `s` - A line from the input
     fn new(s: &str) -> Self {
-        let len = s.len();
-        let items: Vec<Item> = s.chars().into_iter().map(Item).collect();
-        Self {
-            first: items[0..len/2].to_vec(),
-            second: items[len/2..].to_vec()
-        }
+        let mut parts = s.split(',');
+        Self(Range::new(parts.next().unwrap()), Range::new(parts.next().unwrap()))
     }
-    /// Find the duplicate in both compartments.
-    /// There should only be one so only one is searched.
-    fn get_duplicate(&self) -> Item {
-        // If unwarp does not work the input is malformed
-        *self.first.iter().find(|el| self.second.iter().any(|e| &e == el)).unwrap()
+    /// Check if the ranges of the assignment overlap completely
+    fn assignment_overlaps_completely(&self) -> bool {
+        self.0.contains_range(&self.1) || self.1.contains_range(&self.0)
     }
-    /// Find the duplicate and convert it to priority.
-    fn get_duplicate_priority(&self) -> u32 {
-        self.get_duplicate().into()
-    }
-    /// Find the token shared between a group of three.
-    /// 
-    /// # Arguments
-    /// * `second` - The second rucksack in the group
-    /// * `third` - The third rucksack in the group
-    fn find_token(&self, second: &Rucksack, third: &Rucksack) -> Item {
-        let mut iter_first = self.first.iter().chain(self.second.iter());
-        let iter_second = second.first.iter().chain(second.second.iter());
-        let iter_third = third.first.iter().chain(third.second.iter());
-        // Unwrap is ok as the input is malformed otherwise
-        *iter_first.find(|el| iter_second.clone().any(|e| &e == el) && iter_third.clone().any(|e| &e == el)).unwrap()
-    }
-    /// Find the token and convert it to priority
-    fn get_token_priority(&self, second: &Rucksack, third: &Rucksack) -> u32 {
-        self.find_token(second, third).into()
+    /// Check if the ranges of the assignment overlap partially
+    fn assignment_overlaps_partially(&self) -> bool {
+        self.0.partially_contains_range(&self.1) || self.1.partially_contains_range(&self.0)
     }
 }
 
@@ -91,27 +85,15 @@ fn main() {
 
     let input = fs::read_to_string(file).unwrap_or_else(|_| panic!("Unable to read {}", file));
 
-    let mut rucksacks: Vec<Rucksack> = Vec::new();
+    let mut pairs: Vec<Pair> = Vec::new();
 
-    for r in input.split('\n') {
-        rucksacks.push(Rucksack::new(r));
+    for p in input.split('\n') {
+        pairs.push(Pair::new(p));
     }
 
-    let priority_sum: u32 = rucksacks.iter().map(|el| el.get_duplicate_priority()).sum();
-    println!("The sum of the priorities of the duplicate items is: {:?}", priority_sum);
+    let overlaps = pairs.iter().filter(|el| el.assignment_overlaps_completely()).count();
+    println!("There a {} fully overlaps", overlaps);
 
-    let mut iter = rucksacks.iter().peekable();
-    let mut tokens: Vec<u32> = Vec::new();
-    loop {
-        if iter.peek().is_none() {
-            break;
-        }
-        // Unwrap ok as otherwise the input data is malformed
-        let first = iter.next().unwrap();
-        let second = iter.next().unwrap();
-        let third = iter.next().unwrap();
-        tokens.push(first.get_token_priority(second, third));
-    }
-
-    println!("The sum of the priorities of the badges is: {:?}", tokens.iter().sum::<u32>());
+    let partly_overlaps = pairs.iter().filter(|el| el.assignment_overlaps_partially()).count();
+    println!("There a {} partly overlaps", partly_overlaps);
 }
