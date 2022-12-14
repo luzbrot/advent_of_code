@@ -1,110 +1,106 @@
-use clap::Parser;
-use std::{fs, collections::LinkedList};
-use regex::Regex;
+use std::{fs, collections::{LinkedList, HashSet}};
 
 
-/// CLI Input
-#[derive(Parser, Debug)]
-#[command(author, about, long_about = None)]
-struct Args {
-    /// If set the test data is loaded
-    #[arg(long)]
-    test: bool,
+/// A marker with definable needed unique characters
+#[derive(Debug)]
+struct Marker(LinkedList<char>, usize);
+impl Marker {
+    /// Create a new marker
+    /// 
+    /// # Arguments
+    /// * `uniques` - The number of unique characters needed to be a full marker
+    fn new(uniques: usize) -> Self {
+        Self(LinkedList::new(), uniques)
+    }
+    /// Add a char to the marker.
+    /// If there are more characters then there are needed for the check they are removed.
+    /// 
+    /// # Arguments
+    /// * `c` - The char to add
+    fn add(&mut self, c: char) {
+        self.0.push_back(c);
+        if self.0.len() > self.1 {
+            self.0.pop_front();
+        }
+    }
+    /// Check if all characters are unique in the marker.
+    /// If not all characters are added jet false is returned.
+    fn check_all_unique(&self) -> bool {
+        if self.0.len() < self.1 {
+            return false
+        }
+        let mut uniq = HashSet::new();
+        self.0.iter().all(|el| uniq.insert(el))
+    }
 }
 
-
-/// Renamed Vec as Stacks to impl functions on it
-#[derive(Debug, Clone)]
-struct Stacks(Vec<LinkedList<char>>);
-
-impl Stacks {
-    fn new() -> Self {
-        Self(Vec::new())
+/// Rename a vec to impl functions for it
+struct Message(Vec<char>);
+impl Message {
+    /// New Message from the puzzle input
+    fn new(s: &str) -> Self {
+        Self(s.chars().collect())
     }
-
-    /// Add crates from the bottom to the stacks.
-    /// Add stacks if needed.
+    /// Return the position of the start marker (4 uniques)
+    fn get_position_of_start_marker(&self) -> usize {
+        self.get_position_of_marker(4)
+    }
+    /// Return the position of the message marker (14 uniques)
+    fn get_position_of_message_marker(&self) -> usize {
+        self.get_position_of_marker(14)
+    }
+    /// Return the position of a marker with defined uniques.
     /// 
     /// # Arguments
-    /// * `s` - Line from the input defined a row of stacks
-    fn add_from_bottom(&mut self, s: &str) {
-        let crate_re = Regex::new(r"\[(.)\]").unwrap();
-
-        let count = (s.len() - 3) / 4 + 1;
-        while self.0.len() < count {
-            self.0.push(LinkedList::new());
+    /// * `uniques` - The number of uniques needed for the marker
+    fn get_position_of_marker(&self, uniques: usize) -> usize {
+        let mut marker = Marker::new(uniques);
+        let mut iter = self.0.iter().enumerate();
+        for _ in 0..(uniques-1) {
+            marker.add(*iter.next().unwrap().1);
         }
-
-        for i in 0..count {
-            let crate_ = s.chars().skip(i*4).take(3).collect::<String>();
-            if let Some(c) = crate_re.captures(crate_.as_str()) {
-                self.0[i].push_back(c.get(1).unwrap().as_str().chars().next().unwrap());
+        for (i,c) in iter {
+            marker.add(*c);
+            if marker.check_all_unique() {
+                return i + 1
             }
         }
-    }
-    /// Do a move operation of a CrateMover9000 as defined.
-    /// 
-    /// # Arguments
-    /// * `from` - move from
-    /// * `to` - move to
-    /// * `count` - the number to move
-    fn do_operation_9000(&mut self, from: usize, to: usize, count: usize) {
-        // Did not find a fancy iterator operation -.-
-        for _ in 0..count {
-            let tmp = self.0[from - 1].pop_front().unwrap(); // unwrap as input should not be malformed
-            self.0[to - 1].push_front(tmp);
-        }
-    }
-    /// Do a move operation of a CrateMover9001 as defined.
-    /// 
-    /// # Arguments
-    /// * `from` - move from
-    /// * `to` - move to
-    /// * `count` - the number to move
-    fn do_operation_9001(&mut self, from: usize, to: usize, count: usize) {
-        // Did not find a fancy iterator operation -.-
-        let mut tmp = LinkedList::new();
-        for _ in 0..count {
-            tmp.push_back(self.0[from - 1].pop_front().unwrap()); // unwrap as input should not be malformed
-        }
-        for _ in 0..count {
-            self.0[to - 1].push_front(tmp.pop_back().unwrap());
-        }
-    }
-    /// Create the message defined by the crate on top of each stack
-    fn top_message(&self) -> String {
-        self.0.iter().map(|el| el.front().unwrap()).collect() // unwrap as input should not be malformed
+        0
     }
 }
 
 fn main() {
-    let args = Args::parse();
 
-    let file = if args.test { "test_input" } else { "input" };
+    let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
 
-    let input = fs::read_to_string(file).unwrap_or_else(|_| panic!("Unable to read {}", file));
+    let message = Message::new(input.as_str());
+    println!("The start marker is at position {}", message.get_position_of_start_marker());
+    println!("The message marker is at position {}", message.get_position_of_message_marker());
+}
 
-    let mut stacks = Stacks::new();
-    let stack_re = Regex::new(r"((\[.\]|   )(?: |\n))+").unwrap();
-    let operation_re = Regex::new(r"move (\d+) from (\d+) to (\d+)").unwrap();
 
-    for l in input.split('\n') {
-        if stack_re.is_match(l) {
-            stacks.add_from_bottom(l);
-            continue;
-        }
+#[cfg(test)]
+mod tests {
+    use crate::Message;
+
+    #[test]
+    fn check_against_example() {
+        let m1 = Message::new("mjqjpqmgbljsphdztnvjfqwrcgsmlb");
+        let m2 = Message::new("bvwbjplbgvbhsrlpgdmjqwftvncz");
+        let m3 = Message::new("nppdvjthqldpwncqszvftbrmjlhg");
+        let m4 = Message::new("nznrnfrfntjfmvfwmzdfjlvtqnbhcprsg");
+        let m5 = Message::new("zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw");
+
+        assert_eq!(m1.get_position_of_start_marker(), 7);
+        assert_eq!(m2.get_position_of_start_marker(), 5);
+        assert_eq!(m3.get_position_of_start_marker(), 6);
+        assert_eq!(m4.get_position_of_start_marker(), 10);
+        assert_eq!(m5.get_position_of_start_marker(), 11);
+
+        assert_eq!(m1.get_position_of_message_marker(), 19);
+        assert_eq!(m2.get_position_of_message_marker(), 23);
+        assert_eq!(m3.get_position_of_message_marker(), 23);
+        assert_eq!(m4.get_position_of_message_marker(), 29);
+        assert_eq!(m5.get_position_of_message_marker(), 26);
     }
-    let mut stacks_clone = stacks.clone();
-    for l in input.split('\n') {
-        if let Some(op) = operation_re.captures(l) {
-            let from = op.get(2).unwrap().as_str().parse::<usize>().unwrap(); // unwrap as input should not be malformed
-            let to = op.get(3).unwrap().as_str().parse::<usize>().unwrap();
-            let count = op.get(1).unwrap().as_str().parse::<usize>().unwrap();
-            stacks.do_operation_9000(from, to, count);
-            stacks_clone.do_operation_9001(from, to, count);
-        }
-    }
-
-    println!("After rearrangement the top looks like {}", stacks.top_message());
-    println!("After rearrangement the top looks really like {}", stacks_clone.top_message());
 }
