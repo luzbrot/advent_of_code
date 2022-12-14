@@ -1,5 +1,6 @@
 use clap::Parser;
-use std::{fs, ops::{Deref, DerefMut}};
+use std::{fs, collections::LinkedList};
+use regex::Regex;
 
 
 /// CLI Input
@@ -12,69 +13,67 @@ struct Args {
 }
 
 
-/// Rename std::ops::Range<u32> to impl traits and new functions for it
-#[derive(Debug)]
-struct Range(std::ops::Range<u32>);
-impl Range {
-    /// Create a new Range from the input part.
-    /// Gets split on '-' and used as start and end.
-    /// 
-    /// # Arguments
-    /// * `s` - The part of the input string
-    fn new(s: &str) -> Self {
-        let mut parts = s.split('-');
-        Self(std::ops::Range{
-            start: parts.next().unwrap().parse::<u32>().unwrap(), // Just unwrap as there is an error the input is malformed
-            end: parts.next().unwrap().parse::<u32>().unwrap() + 1 // We need to add one as the range is defined as exclusive
-        })
-    }
-}
-impl Range {
-    /// Checks if the other range is contained in this range
-    /// 
-    /// # Arguments
-    /// * `other` - The other range to check for
-    fn contains_range(&self, other: &Self) -> bool {
-        let end = other.end - 1; // -1 as we added +1 because exclusive end
-        self.contains(&other.start) && self.contains(&end)
-    }
-    /// Checks if this other range is overlapped by the other range
-    /// 
-    /// # Arguments
-    /// * `other` - The other range to check for
-    fn partially_contains_range(&self, other: &Self) -> bool {
-        let end = other.end - 1; // -1 as we added +1 because exclusive end
-        self.contains(&other.start) || self.contains(&end)
-    }
-}
-/// Impl Deref to use Range as std::ops::Range
-impl Deref for Range {
-    type Target = std::ops::Range<u32>;
-    fn deref(&self) -> &std::ops::Range<u32> { &self.0 }
-}
-impl DerefMut for Range {
-    fn deref_mut(&mut self) -> &mut std::ops::Range<u32> { &mut self.0 }
-}
+/// Renamed Vec as Stacks to impl functions on it
+#[derive(Debug, Clone)]
+struct Stacks(Vec<LinkedList<char>>);
 
-/// A Pair of two ranges from the assignment.
-#[derive(Debug)]
-struct Pair(Range, Range);
-impl Pair {
-    /// Create a new assignment pair from the input.
+impl Stacks {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Add crates from the bottom to the stacks.
+    /// Add stacks if needed.
     /// 
     /// # Arguments
-    /// * `s` - A line from the input
-    fn new(s: &str) -> Self {
-        let mut parts = s.split(',');
-        Self(Range::new(parts.next().unwrap()), Range::new(parts.next().unwrap()))
+    /// * `s` - Line from the input defined a row of stacks
+    fn add_from_bottom(&mut self, s: &str) {
+        let crate_re = Regex::new(r"\[(.)\]").unwrap();
+
+        let count = (s.len() - 3) / 4 + 1;
+        while self.0.len() < count {
+            self.0.push(LinkedList::new());
+        }
+
+        for i in 0..count {
+            let crate_ = s.chars().skip(i*4).take(3).collect::<String>();
+            if let Some(c) = crate_re.captures(crate_.as_str()) {
+                self.0[i].push_back(c.get(1).unwrap().as_str().chars().next().unwrap());
+            }
+        }
     }
-    /// Check if the ranges of the assignment overlap completely
-    fn assignment_overlaps_completely(&self) -> bool {
-        self.0.contains_range(&self.1) || self.1.contains_range(&self.0)
+    /// Do a move operation of a CrateMover9000 as defined.
+    /// 
+    /// # Arguments
+    /// * `from` - move from
+    /// * `to` - move to
+    /// * `count` - the number to move
+    fn do_operation_9000(&mut self, from: usize, to: usize, count: usize) {
+        // Did not find a fancy iterator operation -.-
+        for _ in 0..count {
+            let tmp = self.0[from - 1].pop_front().unwrap(); // unwrap as input should not be malformed
+            self.0[to - 1].push_front(tmp);
+        }
     }
-    /// Check if the ranges of the assignment overlap partially
-    fn assignment_overlaps_partially(&self) -> bool {
-        self.0.partially_contains_range(&self.1) || self.1.partially_contains_range(&self.0)
+    /// Do a move operation of a CrateMover9001 as defined.
+    /// 
+    /// # Arguments
+    /// * `from` - move from
+    /// * `to` - move to
+    /// * `count` - the number to move
+    fn do_operation_9001(&mut self, from: usize, to: usize, count: usize) {
+        // Did not find a fancy iterator operation -.-
+        let mut tmp = LinkedList::new();
+        for _ in 0..count {
+            tmp.push_back(self.0[from - 1].pop_front().unwrap()); // unwrap as input should not be malformed
+        }
+        for _ in 0..count {
+            self.0[to - 1].push_front(tmp.pop_back().unwrap());
+        }
+    }
+    /// Create the message defined by the crate on top of each stack
+    fn top_message(&self) -> String {
+        self.0.iter().map(|el| el.front().unwrap()).collect() // unwrap as input should not be malformed
     }
 }
 
@@ -85,15 +84,27 @@ fn main() {
 
     let input = fs::read_to_string(file).unwrap_or_else(|_| panic!("Unable to read {}", file));
 
-    let mut pairs: Vec<Pair> = Vec::new();
+    let mut stacks = Stacks::new();
+    let stack_re = Regex::new(r"((\[.\]|   )(?: |\n))+").unwrap();
+    let operation_re = Regex::new(r"move (\d+) from (\d+) to (\d+)").unwrap();
 
-    for p in input.split('\n') {
-        pairs.push(Pair::new(p));
+    for l in input.split('\n') {
+        if stack_re.is_match(l) {
+            stacks.add_from_bottom(l);
+            continue;
+        }
+    }
+    let mut stacks_clone = stacks.clone();
+    for l in input.split('\n') {
+        if let Some(op) = operation_re.captures(l) {
+            let from = op.get(2).unwrap().as_str().parse::<usize>().unwrap(); // unwrap as input should not be malformed
+            let to = op.get(3).unwrap().as_str().parse::<usize>().unwrap();
+            let count = op.get(1).unwrap().as_str().parse::<usize>().unwrap();
+            stacks.do_operation_9000(from, to, count);
+            stacks_clone.do_operation_9001(from, to, count);
+        }
     }
 
-    let overlaps = pairs.iter().filter(|el| el.assignment_overlaps_completely()).count();
-    println!("There a {} fully overlaps", overlaps);
-
-    let partly_overlaps = pairs.iter().filter(|el| el.assignment_overlaps_partially()).count();
-    println!("There a {} partly overlaps", partly_overlaps);
+    println!("After rearrangement the top looks like {}", stacks.top_message());
+    println!("After rearrangement the top looks really like {}", stacks_clone.top_message());
 }
