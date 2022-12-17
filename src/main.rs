@@ -1,191 +1,292 @@
-use std::ops::{Sub, AddAssign};
-use std::{fs, collections::LinkedList};
-use itertools::Itertools;
+use std::{fs, collections::{LinkedList, linked_list::Iter}};
 
+/// Possible sub operations.
+enum SubOperation {
+    /// Add the number
+    Addx(i32),
+    /// Do nothing
+    Noop
+}
 
-/// Position struct to indicate rope parts positions
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-struct Position {
+/// A renamed list of suboperations resulting in one operation.
+/// Noop is noop, but addx is basically noop and add.
+struct Operation(LinkedList<SubOperation>);
+impl Operation {
+    /// Create a iterator of the underlining list
+    fn iter(&self) -> Iter<'_, SubOperation> {
+        self.0.iter()
+    }
+}
+impl From<&str> for Operation {
+    /// From input line
+    fn from(s: &str) -> Self {
+        let mut list = LinkedList::new();
+        if s.starts_with("addx") { // addx => noop + addx
+            let mut parts = s.split(' ');
+            list.push_back(SubOperation::Noop);
+            list.push_back(SubOperation::Addx(parts.nth(1).unwrap().parse().unwrap()));
+        }
+        else if s.starts_with("noop") {
+            list.push_back(SubOperation::Noop);
+        }
+        else {
+            panic!("Unknown operation: {}", s)
+        }
+        Self(list)
+    }
+}
+
+/// A cpu has multiple operations queued a start value for its register
+struct Cpu {
+    /// The start value of the register x
     x: i32,
-    y: i32
+    /// The queued operations
+    ops: LinkedList<Operation>
 }
-impl Position {
-    /// Check if this position is touching a other position as defined
-    fn is_touching(&self, other: &Position) -> bool {
-        (self.x - other.x).abs() <= 1 && (self.y - other.y).abs() <= 1
-    }
-}
-/// Impl Sub to be able to do a - b
-impl Sub for Position {
-    type Output = Self;
-    fn sub(self, other: Self) -> Self::Output {
+impl Cpu {
+    /// Create a new cpu with start value x = 1.
+    /// The ops queue will be empty and need to be added with `add_ops_from_str`.
+    fn new() -> Self {
         Self {
-            x: self.x - other.x,
-            y: self.y - other.y
+            x: 1,
+            ops: LinkedList::new()
         }
     }
-}
-// Impl AddAssign to be able to do a += b
-impl AddAssign for Position {
-    fn add_assign(&mut self, other: Self) {
-        self.x += other.x;
-        self.y += other.y;
+    /// Add queued operations to the cpu.
+    /// 
+    /// # Arguments
+    /// * `ops` - Operations in each line (puzzle input)
+    fn add_ops_from_str(&mut self, ops: &str) {
+        for line in ops.split('\n') {
+            self.ops.push_back(line.into());
+        }
+    }
+    /// Calculate the expected signal strength to a given cycle without consuming the operations
+    /// 
+    /// # Arguments
+    /// * `cycle` - The cycle to calculate for
+    fn get_signal_strength_for_cycle(&self, cycle: usize) -> i32 {
+        (self.x + self.ops.iter().flat_map(|el| el.iter()).take(cycle - 1).map(|el| -> i32 {
+            if let SubOperation::Addx(x) = el {
+                return *x
+            }
+            0
+        }).sum::<i32>()) * (cycle as i32)
+    }
+    /// Draw the image resulting from the operations queued with out consuming them.
+    /// 
+    /// # Returns
+    /// * String containing the image with \n for a new line
+    fn draw_image(&self) -> String {
+        let mut image = "".to_string();
+        let iter = self.ops.iter().flat_map(|el| el.iter()).map(|el| -> i32 {
+            if let SubOperation::Addx(x) = el {
+                return *x
+            }
+            0
+        });
+        let mut x = self.x;
+        for (i, dx) in iter.enumerate() {
+            let pixel = (i % 40) as i32;
+            if x == pixel || x + 1 == pixel || x - 1 == pixel {
+                image += "#";
+            }
+            else {
+                image += ".";
+            }
+            if pixel == 39 {
+                image += "\n";
+            }
+            x += dx;
+        }
+        image
     }
 }
 
-/// Rope struct to track rope state
-struct Rope {
-    /// The head of the rope
-    head: Position,
-    /// The parts of the rope (can be 0)
-    parts: Vec<Position>,
-    /// The tail of the rope
-    tail: Position,
-    /// List of visited places of the tail of the rope
-    visited: LinkedList<Position>
-}
-impl Rope {
-    /// Create a new rope with a defined number of parts.
-    /// 
-    /// # Arguments
-    /// * `parts` - The number of parts
-    fn new(parts: u32) -> Self {
-        let mut visited = LinkedList::new();
-        visited.push_back(Position{x: 0, y: 0});
-        let mut rope_parts = Vec::new();
-        for _ in 0..parts {
-            rope_parts.push(Position{x: 0, y: 0});
-        }
-        Self {
-            head: Position { x: 0, y: 0 },
-            parts: rope_parts,
-            tail: Position { x: 0, y: 0 },
-            visited
-        }
-    }
-    /// Update the tail position if needed and safe the new tail position.
-    /// Also update the parts.
-    fn update_tail(&mut self) {
-        self.update_parts();
-        let reference = if !self.parts.is_empty() {*self.parts.last().unwrap()} else {self.head};
-        if self.tail.is_touching(&reference) {
-            return;
-        }
-        let mut dif = reference - self.tail;
-        dif.x = dif.x.signum();
-        dif.y = dif.y.signum();
-        self.tail += dif;
-        self.visited.push_back(self.tail);
-    }
-    /// Update all part positions if needed
-    fn update_parts(&mut self) {
-        let mut reference = self.head;
-        for part in self.parts.iter_mut() {
-            if part.is_touching(&reference) {
-                return;
-            }
-            let mut dif = reference - *part;
-            dif.x = dif.x.signum();
-            dif.y = dif.y.signum();
-            *part += dif;
-            reference = *part;
-        }
-    }
-    /// Move the head up n times and update the tail
-    fn move_up(&mut self, n: u32) {
-        for _ in 0..n {
-            self.head.y += 1;
-            self.update_tail();
-        }
-    }
-    /// Move the head down n times and update the tail
-    fn move_down(&mut self, n: u32) {
-        for _ in 0..n {
-            self.head.y -= 1;
-            self.update_tail();
-        }
-    }
-    /// Move the head right n times and update the tail
-    fn move_right(&mut self, n: u32) {
-        for _ in 0..n {
-            self.head.x += 1;
-            self.update_tail();
-        }
-    }
-    /// Move the head left n times and update the tail
-    fn move_left(&mut self, n: u32) {
-        for _ in 0..n {
-            self.head.x -= 1;
-            self.update_tail();
-        }
-    }
-    /// Count the unique positions in the visited places of the tail
-    fn count_visited_places(&self) -> usize {
-        self.visited.iter().unique().count()
-    }
-    /// Move the head according to a sequence (puzzle input)
-    /// 
-    /// # Arguments
-    /// * `input` - The sequence to move the head
-    fn move_seq(&mut self, input: &str) {
-        for line in input.split('\n') {
-            let mut parts = line.split(' ');
-            match parts.next().unwrap() {
-                "U" => self.move_up(parts.next().unwrap().parse().unwrap()),
-                "D" => self.move_down(parts.next().unwrap().parse().unwrap()),
-                "R" => self.move_right(parts.next().unwrap().parse().unwrap()),
-                "L" => self.move_left(parts.next().unwrap().parse().unwrap()),
-                _ => panic!("Malformed input")
-            }
-        }
-    }
-}
+
 
 fn main() {
 
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
 
-    let mut rope = Rope::new(0);
-    rope.move_seq(&input);
-    println!("There were {} places visited.", rope.count_visited_places());
-    rope = Rope::new(8);
-    rope.move_seq(&input);
-    println!("There were {} places visited by the bigger tope.", rope.count_visited_places());
+    let mut cpu = Cpu::new();
+
+    cpu.add_ops_from_str(&input);
+    let sssum = cpu.get_signal_strength_for_cycle(20) + cpu.get_signal_strength_for_cycle(60) + cpu.get_signal_strength_for_cycle(100) + cpu.get_signal_strength_for_cycle(140) + cpu.get_signal_strength_for_cycle(180) + cpu.get_signal_strength_for_cycle(220);
+    println!("The sum of the signal strengths is {}", sssum);
+    println!("The image looks like:");
+    println!("{}", cpu.draw_image());
+
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::Rope;
+    use crate::Cpu;
 
 
     #[test]
     fn check_against_example() {
-        let input = "R 4
-U 4
-L 3
-D 1
-R 4
-D 1
-L 5
-R 2";
-        let mut rope = Rope::new(0);
-        rope.move_seq(input);
-        assert_eq!(rope.count_visited_places(), 13);
+        let mut cpu = Cpu::new();
+        cpu.add_ops_from_str("addx 15
+addx -11
+addx 6
+addx -3
+addx 5
+addx -1
+addx -8
+addx 13
+addx 4
+noop
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx -35
+addx 1
+addx 24
+addx -19
+addx 1
+addx 16
+addx -11
+noop
+noop
+addx 21
+addx -15
+noop
+noop
+addx -3
+addx 9
+addx 1
+addx -3
+addx 8
+addx 1
+addx 5
+noop
+noop
+noop
+noop
+noop
+addx -36
+noop
+addx 1
+addx 7
+noop
+noop
+noop
+addx 2
+addx 6
+noop
+noop
+noop
+noop
+noop
+addx 1
+noop
+noop
+addx 7
+addx 1
+noop
+addx -13
+addx 13
+addx 7
+noop
+addx 1
+addx -33
+noop
+noop
+noop
+addx 2
+noop
+noop
+noop
+addx 8
+noop
+addx -1
+addx 2
+addx 1
+noop
+addx 17
+addx -9
+addx 1
+addx 1
+addx -3
+addx 11
+noop
+noop
+addx 1
+noop
+addx 1
+noop
+noop
+addx -13
+addx -19
+addx 1
+addx 3
+addx 26
+addx -30
+addx 12
+addx -1
+addx 3
+addx 1
+noop
+noop
+noop
+addx -9
+addx 18
+addx 1
+addx 2
+noop
+noop
+addx 9
+noop
+noop
+noop
+addx -1
+addx 2
+addx -37
+addx 1
+addx 3
+noop
+addx 15
+addx -21
+addx 22
+addx -6
+addx 1
+noop
+addx 2
+addx 1
+noop
+addx -10
+noop
+noop
+addx 20
+addx 1
+addx 2
+addx 2
+addx -6
+addx -11
+noop
+noop
+noop");
 
-        rope = Rope::new(8);
-        rope.move_seq(input);
-        assert_eq!(rope.count_visited_places(), 1);
-
-        rope = Rope::new(8);
-        rope.move_seq("R 5
-U 8
-L 8
-D 3
-R 17
-D 10
-L 25
-U 20");
-    assert_eq!(rope.count_visited_places(), 36);
+        assert_eq!(cpu.get_signal_strength_for_cycle(20), 420);
+        assert_eq!(cpu.get_signal_strength_for_cycle(60), 1140);
+        assert_eq!(cpu.get_signal_strength_for_cycle(100), 1800);
+        assert_eq!(cpu.get_signal_strength_for_cycle(140), 2940);
+        assert_eq!(cpu.get_signal_strength_for_cycle(180), 2880);
+        assert_eq!(cpu.get_signal_strength_for_cycle(220), 3960);
+        assert_eq!(cpu.draw_image(), "##..##..##..##..##..##..##..##..##..##..
+###...###...###...###...###...###...###.
+####....####....####....####....####....
+#####.....#####.....#####.....#####.....
+######......######......######......####
+#######.......#######.......#######.....
+".to_string());
     }
 }
