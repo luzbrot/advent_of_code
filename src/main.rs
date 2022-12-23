@@ -1,161 +1,260 @@
-use std::fs;
+use std::{fs, cmp::Ordering};
 
-/// A Hill holding the terrain (input)
-struct Hill {
-    /// The terrain of the hill (Height from 0 to 27)
-    terrain: Vec<Vec<usize>>,
-    /// The start x, y position
-    start: (usize, usize),
-    /// The end x, y position
-    end: (usize, usize)
+
+/// A Packet can be a value or a list of Packets
+#[derive(Debug, Clone)]
+enum Packet {
+    Value(u32),
+    List(Vec<Packet>)
 }
-impl Hill {
-    /// Get the number of steps needed for the shortest route from start to end
-    fn get_number_of_steps_for_shortest_route_from_start(&self) -> usize {
-        self.get_number_of_steps_for_shortest_route(self.start)
-    }
-    /// Get the most scenic route from height <=1 to end.
-    /// This could be optimized, but it is just a puzzle^^
-    fn get_number_of_steps_for_shortest_scenic_route(&self) -> usize {
-        let mut start_indexes = Vec::new();
-        for (y, row) in self.terrain.iter().enumerate() {
-            for (x, field) in row.iter().enumerate() {
-                if *field <= 1 {
-                    start_indexes.push((x, y));
-                }
-            }
+impl Packet {
+    /// Promote A Value to a List containing this Value.
+    /// A List will be returned as is
+    fn promote(&self) -> Self {
+        match self {
+            Self::List(_) => self.clone(),
+            Self::Value(_) => Self::List(vec![self.clone()])
         }
-        start_indexes.iter().map(|el| self.get_number_of_steps_for_shortest_route(*el)).min().unwrap()
-    }
-    /// Get the shortest number of steps from a defined start to the end.
-    /// Uses Dijkstra algorithm to calculate the route.
-    /// 
-    /// # Arguments
-    /// * `start` - The x, y position  of the start
-    fn get_number_of_steps_for_shortest_route(&self, start: (usize, usize)) -> usize {
-        let rows = self.terrain.len();
-        let columns = self.terrain[0].len();
-
-        let nodes = rows * columns;
-        let start_index = start.0 + start.1 * columns;
-        let end_index = self.end.0 + self.end.1 * columns;
-        let mut distances: Vec<(usize, usize, usize, bool)> = Vec::new(); // (index, distance, prev node, done)
-        for i in 0..nodes {
-            distances.push((i, if i == start_index {
-                0
-            }
-            else {
-                usize::MAX
-            }, i, false));
-        }
-
-        loop {
-            let opt_node = distances.iter().filter(|el| !el.3).min_by(|a, b| a.1.cmp(&b.1)).copied();
-            if let Some(node) = opt_node {
-                if node.0 == end_index { break; }
-                distances[node.0].3 = true;
-                let x = node.0 % columns;
-                let y = node.0 / columns;
-                let current_height = self.terrain[y][x];
-                let next_distance = node.1 + if node.1 == usize::MAX { 0 } else { 1 };
-                if let Some(right_height) = self.terrain[y].get(x + 1) {
-                    if *right_height <= current_height + 1 {
-                        let i = x + 1 + y * columns;
-                        if distances[i].1 > next_distance {
-                            distances[i].1 = next_distance;
-                            distances[i].2 = node.0;
-                        }
-                    }
-                }
-                if x > 0 {
-                    if let Some(left_height) = self.terrain[y].get(x - 1) {
-                        if *left_height <= current_height + 1 {
-                            let i = x - 1 + y * columns;
-                            if distances[i].1 > next_distance {
-                                distances[i].1 = next_distance;
-                                distances[i].2 = node.0;
-                            }
-                        }
-                    }
-                }
-                if y > 0 {
-                    if let Some(up_row) = self.terrain.get(y - 1) {
-                        let up_height = up_row[x];
-                        if up_height <= current_height + 1 {
-                            let i = x + (y - 1) * columns;
-                            if distances[i].1 > next_distance {
-                                distances[i].1 = next_distance;
-                                distances[i].2 = node.0;
-                            }
-                        }
-                    }
-                }
-                if let Some(down_row) = self.terrain.get(y + 1) {
-                    let down_height = down_row[x];
-                    if down_height <= current_height + 1 {
-                        let i = x + (y + 1) * columns;
-                        if distances[i].1 > next_distance {
-                            distances[i].1 = next_distance;
-                            distances[i].2 = node.0;
-                        }
-                    }
-                }
-            }
-            else { break; }
-        }
-
-        distances[end_index].1
     }
 }
-impl From<&str> for Hill {
+impl From<&str> for Packet {
     fn from(s: &str) -> Self {
-        let mut terrain: Vec<Vec<usize>> = Vec::new();
-        let mut start = (0, 0);
-        let mut end = (0, 0);
-        for (y, line) in s.split('\n').enumerate() {
+        if s.starts_with('[') {
             let mut vec = Vec::new();
-            for (x, c) in line.chars().enumerate() {
-                if c == 'S' {
-                    vec.push(0);
-                    start = (x, y);
+            let mut stripped = s.strip_prefix('[').unwrap().strip_suffix(']').unwrap();
+            while !stripped.is_empty() {
+                let iter = stripped.chars().enumerate();
+                let mut parsing_list = 0;
+                let mut done_something = false;
+                for (i, c) in iter {
+                    if c == ',' {
+                        if parsing_list > 0 {continue;}
+                        vec.push(stripped[0..i].into());
+                        if i + 1 < stripped.len() {
+                            stripped = &stripped[(i+1)..];
+                        }
+                        else {
+                            stripped = "";
+                        }
+                        done_something = true;
+                        break;
+                    }
+                    else if c == '[' {
+                        parsing_list += 1;
+                    }
+                    else if c == ']' {
+                        parsing_list -= 1;
+                        if parsing_list == 0 {
+                            vec.push(stripped[0..(i+1)].into());
+                            if i + 2 < stripped.len() {
+                                stripped = &stripped[(i+2)..];
+                            }
+                            else {
+                                stripped = "";
+                            }
+                            done_something = true;
+                            break;
+                        }
+                    }
                 }
-                else if c == 'E' {
-                    vec.push(27);
-                    end = (x, y);
-                }
-                else {
-                    vec.push(c as usize - 96);
+                if !done_something {
+                    vec.push(stripped.into());
+                    break;
                 }
             }
-            terrain.push(vec);
+            Packet::List(vec)
         }
-        Self { terrain, start, end }
+        else {
+            Packet::Value(s.parse().unwrap())
+        }
     }
 }
+
+impl Eq for Packet {}
+impl PartialEq for Packet {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Packet::List(list) => {
+                match other {
+                    Packet::List(other_list) => {
+                        let iter = list.iter().zip(other_list.iter());
+                        let mut skipped_iter = iter.skip_while(|el| el.0 == el.1);
+                        if let Some(el) = skipped_iter.next() {
+                            el.0.eq(el.1)
+                        }
+                        else {
+                            list.len() == other_list.len()
+                        }
+                        
+                    },
+                    Packet::Value(_) => {
+                        self.eq(&other.promote())
+                    }
+                }
+            },
+            Packet::Value(val) => {
+                match other {
+                    Packet::List(_) => {
+                        self.promote().eq(other)
+                    },
+                    Packet::Value(other_val) => {
+                        val.eq(other_val)
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Ord for Packet {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self {
+            Packet::List(list) => {
+                match other {
+                    Packet::List(other_list) => {
+                        let iter = list.iter().zip(other_list.iter());
+                        let mut skipped_iter = iter.skip_while(|el| el.0 == el.1);
+                        if let Some(el) = skipped_iter.next() {
+                            el.0.cmp(el.1)
+                        }
+                        else if list.len() < other_list.len() {
+                            Ordering::Less
+                        }
+                        else if list.len() > other_list.len() {
+                            Ordering::Greater
+                        }
+                        else {
+                            Ordering::Equal
+                        }
+                        
+                    },
+                    Packet::Value(_) => {
+                        self.cmp(&other.promote())
+                    }
+                }
+            },
+            Packet::Value(val) => {
+                match other {
+                    Packet::List(_) => {
+                        self.promote().cmp(other)
+                    },
+                    Packet::Value(other_val) => {
+                        val.cmp(other_val)
+                    }
+                }
+            }
+        }
+    }
+}
+impl PartialOrd for Packet {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// A pair of two Packets
+#[derive(Debug)]
+struct Pair(Packet, Packet);
+impl Pair {
+    /// Check if the two packets a correctly ordered (first < second)
+    fn is_correctly_ordered(&self) -> bool {
+        self.0 < self.1
+    }
+}
+impl From<&str> for Pair {
+    fn from(s: &str) -> Self {
+        let mut parts = s.split('\n');
+        Self(
+            parts.next().unwrap().into(),
+            parts.next().unwrap().into()
+        )
+    }
+}
+
+/// Pairs a renamed vec of pairs
+#[derive(Debug)]
+struct Pairs(Vec<Pair>);
+impl Pairs {
+    /// Part 1
+    fn get_sum_of_index_of_correctly_ordered_packets(&self) -> usize {
+        self.0.iter().enumerate().filter(|el| el.1.is_correctly_ordered()).map(|el| el.0 + 1).sum()
+    }
+    /// Part 2
+    /// Adds a Pair to the vec.
+    fn get_decoder_key(&mut self) -> usize {
+        let first_divider: Packet = "[[2]]".into();
+        let second_divider: Packet = "[[6]]".into();
+        self.0.push(Pair(first_divider.clone(), second_divider.clone()));
+
+        let mut packets: Vec<Packet> = self.0.iter().flat_map(|el| vec![el.0.clone(), el.1.clone()]).collect();
+        packets.sort();
+
+        packets.iter().enumerate().filter(|el| el.1 == &first_divider || el.1 == &second_divider).map(|el| el.0 + 1).product()
+    }
+}
+impl From<&str> for Pairs {
+    fn from(s: &str) -> Self {
+        let mut vec = Vec::new();
+        let parts = s.split("\n\n");
+        for p in parts {
+            vec.push(p.into());
+        }
+
+        Self(vec)
+    }
+}
+
 
 fn main() {
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
 
-    let hill: Hill = input.as_str().into();
-    println!("The shortest route to the end does take {} steps", hill.get_number_of_steps_for_shortest_route_from_start());
-    println!("The shortest scenic route to the end does take {} steps", hill.get_number_of_steps_for_shortest_scenic_route());
+    let mut pairs: Pairs = input.as_str().into();
+    println!("The sum of indexes is {}", pairs.get_sum_of_index_of_correctly_ordered_packets());
+    println!("The decoder key is {}", pairs.get_decoder_key());
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::Hill;
+    use crate::{Pairs, Pair};
+
 
     #[test]
     fn check_against_example() {
-        let input = "Sabqponm
-abcryxxl
-accszExk
-acctuvwj
-abdefghi";
-        let hill: Hill = input.into();
+        let p1: Pair = "[[1]]
+[1]".into();
+        assert!(p1.0 == p1.1);
+        let p2: Pair = "[[1],4]
+[1,[2,[3,[4,[5,6,0]]]],8,9]".into();
+        assert!(!p2.is_correctly_ordered());
 
-        assert_eq!(hill.get_number_of_steps_for_shortest_route_from_start(), 31);
-        assert_eq!(hill.get_number_of_steps_for_shortest_scenic_route(), 29);
+
+        let input = "[1,1,3,1,1]
+[1,1,5,1,1]
+
+[[1],[2,3,4]]
+[[1],4]
+
+[9]
+[[8,7,6]]
+
+[[4,4],4,4]
+[[4,4],4,4,4]
+
+[7,7,7,7]
+[7,7,7]
+
+[]
+[3]
+
+[[[]]]
+[[]]
+
+[1,[2,[3,[4,[5,6,7]]]],8,9]
+[1,[2,[3,[4,[5,6,0]]]],8,9]";
+
+        let mut pairs: Pairs = input.into();
+        assert_eq!(pairs.get_sum_of_index_of_correctly_ordered_packets(), 13);
+        assert_eq!(pairs.get_decoder_key(), 140);
     }
 }
