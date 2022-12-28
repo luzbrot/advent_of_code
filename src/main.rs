@@ -1,54 +1,42 @@
-use std::{fs, ops::{Add, AddAssign}};
+use std::{fs, ops::{Add, Sub, Div, AddAssign, Mul}, iter::Sum};
+use regex::Regex;
+#[macro_use]
+extern crate lazy_static;
+use itertools::Itertools;
 
-
-/// The possible tile types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Tiles {
-    Air,
-    Sand,
-    Rock
+/// A Position
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+struct Position {
+    x: i64,
+    y: i64
 }
-impl Default for Tiles {
-    fn default() -> Self {
-        Tiles::Air
-    }
-}
-impl Default for &Tiles {
-    fn default() -> Self {
-        &Tiles::Air
-    }
-}
-
-/// A vector for the positions
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-struct Vector {
-    x: i32, 
-    y: i32
-}
-impl Vector {
-    /// Calculate the direction to an other vec under the assumption that directions
-    /// are always straight vertical or horizontal (Puzzle description).
+impl Position {
+    /// Calculate the manhattan distance to an other position
     /// 
-    /// # Arguments
-    /// * `to` - The other vector to calculate the direction to
-    fn direction_to(&self, to: &Vector) -> Self {
-        Self {
-            x: (to.x - self.x).signum(),
-            y: (to.y - self.y).signum()
-        }
+    /// #Arguments
+    /// * `other` - The other position to calculate to
+    fn manhattan_distance(&self, other: &Self) -> i64 {
+        (other.x - self.x).abs() + (other.y - self.y).abs()
+    }
+    /// Calculate the tuning frequency of a position
+    fn determine_tuning_frequency(&self) -> i64 {
+        self.x * 4000000 + self.y
     }
 }
-impl From<&str> for Vector {
+impl From<&str> for Position {
     fn from(s: &str) -> Self {
-        let mut parts = s.split(',');
+        lazy_static!{
+            static ref RE: Regex = Regex::new(r"x=([-\d]+), y=([-\d]+)").unwrap();
+        }
+        let cap = RE.captures(s).unwrap();
         Self {
-            x: parts.next().unwrap().parse().unwrap(),
-            y: parts.next().unwrap().parse().unwrap()
+            x: cap.get(1).unwrap().as_str().parse().unwrap(),
+            y: cap.get(2).unwrap().as_str().parse().unwrap()
         }
     }
 }
-impl Add for Vector {
-    type Output = Vector;
+impl Add for Position {
+    type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
@@ -56,197 +44,196 @@ impl Add for Vector {
         }
     }
 }
-impl AddAssign for Vector {
+impl AddAssign for Position {
     fn add_assign(&mut self, rhs: Self) {
         self.x += rhs.x;
         self.y += rhs.y;
     }
 }
-
-/// A line with multiple segments. Each segment is from the previous position to the next.
-struct Line(Vec<Vector>);
-impl From<&str> for Line {
-    fn from(s: &str) -> Self {
-        let mut vec =  Vec::new();
-
-        for part in s.split(" -> ") {
-            vec.push(part.into());
-        }
-
-        Self(vec)
-    }
-}
-
-/// A cave saving the tiles in a cave and the start position of the sand 
-#[derive(Debug)]
-struct Cave {
-    /// The tiles in the cave.
-    /// If a position is not set the default is assumed.
-    /// This can lead to rows of just default tiles to be an empty Vec.
-    tiles: Vec<Vec<Tiles>>,
-    /// The start/spawn position of the sand
-    sand_entry: Vector
-}
-impl Cave {
-    /// Create a new cave with just default tiles
-    fn new() -> Self {
+impl Sub for Position {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
         Self {
-            tiles: Vec::new(),
-            sand_entry: Vector { x: 500, y: 0 }
+            x: self.x - rhs.x,
+            y: self.y - rhs.y
         }
     }
-    /// Draw a line of rock in the cave
+}
+impl Div<i64> for Position {
+    type Output = Self;
+    fn div(self, rhs: i64) -> Self::Output {
+        Self {
+            x: self.x / rhs,
+            y: self.y / rhs
+        }
+    }
+}
+impl Mul<i64> for Position {
+    type Output = Self;
+    fn mul(self, rhs: i64) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs
+        }
+    }
+}
+impl Sum for Position {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut res = Position {x: 0, y: 0};
+        for i in iter {
+            res += i;
+        }
+        res
+    }
+}
+
+/// A sensor with its nearest found beacon
+struct Sensor {
+    /// The position of the beacon
+    position: Position,
+    /// The closest beacon to the sensor
+    closest_beacon: Position
+}
+impl Sensor {
+    /// Get the coverage of the sensor for a specific y coordinate
     /// 
     /// # Arguments
-    /// * `line` - The line to draw with rock
-    fn draw_line_of_rock(&mut self, line: &Line) {
-        let lefts = line.0.iter().take(line.0.len() - 1);
-        let rights = line.0.iter().skip(1);
-        for line_part in lefts.zip(rights) {
-            let dir = line_part.0.direction_to(line_part.1);
-            let mut pos = *line_part.0;
-            while pos != *line_part.1 {
-                self.add_tile(Tiles::Rock, pos);
-                pos += dir;
-            }
-            self.add_tile(Tiles::Rock, pos);
-        }
-    }
-    /// Adds a tile in the cave of the specified type.
-    /// Only needed positions are populated.
-    /// 
-    /// # Arguments
-    /// * `tile` - The tile to add to the cave
-    /// * `pos` - The position to add the tile to
-    fn add_tile(&mut self, tile: Tiles, pos: Vector) {
-        for _ in self.tiles.len()..(pos.y as usize + 1) {
-            self.tiles.push(Vec::new());
-        }
-        for _ in self.tiles[pos.y as usize].len()..(pos.x as usize + 1) {
-            self.tiles[pos.y as usize].push(Tiles::default());
-        }
-        self.tiles[pos.y as usize][pos.x as usize] = tile;
-    }
-    /// Spawn sand at the spawn position and find the position where it comes to rest.
-    /// Does nothing if the spawn position is blocked.
+    /// * `y` - The y coordinate to get the coverage for
     /// 
     /// # Returns
-    /// Returns true if the sand comes to rest.
-    /// Returns false if the sand will come not to rest or if the spawn position is blocked.
-    fn spawn_sand(&mut self) -> bool {
-        let mut pos = self.sand_entry;
-        let sand_can_move = |pos: &mut Vector| -> bool {
-            if let Some(col) = self.tiles.get(pos.y as usize + 1) {
-                let down = col.get(pos.x as usize).unwrap_or_default();
-                if *down == Tiles::Air {
-                    pos.y += 1;
-                    return true;
-                }
-                let down_left = col.get(pos.x as usize - 1).unwrap_or_default();
-                if *down_left == Tiles::Air {
-                    pos.y += 1;
-                    pos.x -= 1;
-                    return true;
-                }
-                let down_right = col.get(pos.x as usize + 1).unwrap_or_default();
-                if *down_right == Tiles::Air {
-                    pos.y += 1;
-                    pos.x += 1;
-                    return true;
-                }
-                false
-            }
-            else {
-                pos.y += 1;
-                true
-            }
-        };
+    /// A vector with all covered positions
+    fn get_coverage_for(&self, y: i64) -> Vec<Position> {
+        let mut coverage = Vec::new();
 
-        if *self.tiles[pos.y as usize].get(pos.x as usize).unwrap_or_default() == Tiles::Sand {
-            // Entry blocked
-            return false;
+        let dis = self.position.manhattan_distance(&self.closest_beacon);
+
+        if (y - self.position.y).abs() > dis {
+            return coverage
         }
-        while sand_can_move(&mut pos) {
-            if pos.y as usize >= self.tiles.len() {
-                break;
+
+        let mut pos = self.position;
+        pos.y = y;
+        for d in -dis..=dis {
+            pos.x = self.position.x + d;
+            if self.position.manhattan_distance(&pos) <= dis {
+                coverage.push(pos);
             }
         }
-        if !sand_can_move(&mut pos) {
-            self.add_tile(Tiles::Sand, pos);
-            true
+
+        coverage
+    }
+    /// Check if a position is covered from the sensor
+    /// 
+    /// # Arguments
+    /// * `pos` - The position to check
+    fn is_covered(&self, pos: &Position) -> bool {
+        self.position.manhattan_distance(pos) <= self.position.manhattan_distance(&self.closest_beacon)
+    }
+    /// Get all positions directly outside of the coverage border
+    fn get_outside_border(&self) -> Vec<Position> {
+        let mut res = Vec::new();
+
+        let dis = self.position.manhattan_distance(&self.closest_beacon) + 1;
+        for dx in -dis..=dis {
+            res.push(Position {
+                x: self.position.x + dx,
+                y: self.position.y - (dis - dx.abs())
+            });
+            if dis - dx.abs() != 0 {
+                res.push(Position {
+                    x: self.position.x + dx,
+                    y: self.position.y + (dis - dx.abs())
+                });
+            }
         }
-        else {
-            false
+
+        res
+    }
+}
+impl From<&str> for Sensor {
+    fn from(s: &str) -> Self {
+        lazy_static!{
+            static ref RE: Regex = Regex::new(r"Sensor at (x=[-\d]+, y=[-\d]+): closest beacon is at (x=[-\d]+, y=[-\d]+)").unwrap();
+        }
+        let cap = RE.captures(s).unwrap();
+        Self {
+            position: cap.get(1).unwrap().as_str().into(),
+            closest_beacon: cap.get(2).unwrap().as_str().into()
         }
     }
-    /// Add a floor two rows under the lowest rows in the cave.
-    fn add_floor(&mut self) {
-        let y = self.tiles.len() + 1;
+}
 
-        for x in 0..(self.sand_entry.x * 2) {
-            self.add_tile(Tiles::Rock, Vector { x, y: y as i32});
+/// Renamed sensor array
+struct Sensors(Vec<Sensor>);
+impl Sensors {
+    /// Count the covered areas for all sensor on a specific y coordinate
+    /// 
+    /// # Arguments
+    /// * `y` - The get the coverage for
+    fn get_coverage_count_for(&self, y: i64) -> usize {
+        let beacons = self.0.iter().map(|el| el.closest_beacon).collect::<Vec<Position>>();
+        self.0.iter().flat_map(|el| el.get_coverage_for(y)).unique_by(|el| el.x).filter(|el| !beacons.iter().any(|e| e == el)).count()
+    }
+    /// Checks if a position is covered from any sensor
+    /// 
+    /// # Arguments
+    /// * `pos` - The position to check
+    fn is_covered(&self, pos: &Position) -> bool {
+        self.0.iter().any(|el| el.is_covered(pos))
+    }
+    /// Find a distress signal in an square area inside the specified position
+    /// 
+    /// # Arguments
+    /// * `from` - The start position of the square
+    /// * `to` - The inclusive end position of the square
+    fn find_distress_from_to(&self, from: &Position, to: &Position) -> Option<Position> {
+        self.0.iter().flat_map(|el| el.get_outside_border()).filter(|el| el.x >= from.x && el.x <= to.x && el.y >= from.y && el.y <= to.y).find(|el| !self.is_covered(el))
+    }
+}
+impl From<&str> for Sensors {
+    fn from(s: &str) -> Self {
+        let mut vec = Vec::new();
+        for l in s.split('\n') {
+            vec.push(l.into());
         }
+        Self(vec)
     }
 }
 
 
 fn main() {
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
-
-    let mut cave = Cave::new();
-    let mut cave_with_flor = Cave::new();
-
-    for line in input.split('\n') {
-        let line: Line = line.into();
-        cave.draw_line_of_rock(&line);
-        cave_with_flor.draw_line_of_rock(&line);
-    }
-    cave_with_flor.add_floor();
-
-    let mut i = 0;
-    while cave.spawn_sand() {
-        i += 1;
-    }
-    println!("There {} units of sand at rest", i);
-
-    i = 0;
-    while cave_with_flor.spawn_sand() {
-        i += 1;
-    }
-    println!("There are {} units sand until the entry is blocked", i);
+    
+    let sensors: Sensors = input.as_str().into();
+    println!("There are {} positions which can not contain a beacon", sensors.get_coverage_count_for(2000000));
+    println!("The tuning frequency for the distress signal is {}", sensors.find_distress_from_to(&Position { x: 0, y: 0 }, &Position { x: 4000000, y: 4000000 }).unwrap().determine_tuning_frequency())
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::{Cave, Line};
+    use crate::Sensors;
+
 
     #[test]
     fn check_against_example() {
-        let input = "498,4 -> 498,6 -> 496,6
-503,4 -> 502,4 -> 502,9 -> 494,9";
+        let input = "Sensor at x=2, y=18: closest beacon is at x=-2, y=15
+Sensor at x=9, y=16: closest beacon is at x=10, y=16
+Sensor at x=13, y=2: closest beacon is at x=15, y=3
+Sensor at x=12, y=14: closest beacon is at x=10, y=16
+Sensor at x=10, y=20: closest beacon is at x=10, y=16
+Sensor at x=14, y=17: closest beacon is at x=10, y=16
+Sensor at x=8, y=7: closest beacon is at x=2, y=10
+Sensor at x=2, y=0: closest beacon is at x=2, y=10
+Sensor at x=0, y=11: closest beacon is at x=2, y=10
+Sensor at x=20, y=14: closest beacon is at x=25, y=17
+Sensor at x=17, y=20: closest beacon is at x=21, y=22
+Sensor at x=16, y=7: closest beacon is at x=15, y=3
+Sensor at x=14, y=3: closest beacon is at x=15, y=3
+Sensor at x=20, y=1: closest beacon is at x=15, y=3";
 
-        let mut cave = Cave::new();
-        let mut cave_with_floor = Cave::new();
-
-        for line in input.split('\n') {
-            let line: Line = line.into();
-            cave.draw_line_of_rock(&line);
-            cave_with_floor.draw_line_of_rock(&line);
-        }
-
-        cave_with_floor.add_floor();
-
-        let mut i = 0;
-        while cave.spawn_sand() {
-            i += 1;
-        }
-        assert_eq!(i, 24);
-
-        i = 0;
-        while cave_with_floor.spawn_sand() {
-            i += 1;
-        }
-        assert_eq!(i, 93);
+        let sensors: Sensors = input.into();
+        assert_eq!(sensors.get_coverage_count_for(10), 26);
+        assert_eq!(sensors.find_distress_from_to(&crate::Position { x: 0, y: 0 }, &crate::Position { x: 20, y: 20 }).unwrap().determine_tuning_frequency(), 56000011);
     }
 }
