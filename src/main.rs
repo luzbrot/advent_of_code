@@ -1,239 +1,243 @@
-use std::{fs, ops::{Add, Sub, Div, AddAssign, Mul}, iter::Sum};
+use std::fs;
 use regex::Regex;
 #[macro_use]
 extern crate lazy_static;
-use itertools::Itertools;
 
-/// A Position
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-struct Position {
-    x: i64,
-    y: i64
+
+/// A Valve
+#[derive(Debug, PartialEq, Eq)]
+struct Valve {
+    /// Id of the valve
+    id: String,
+    /// The pressure release rate of the valve
+    rate: i32
 }
-impl Position {
-    /// Calculate the manhattan distance to an other position
+impl From<&str> for Valve {
+    fn from(s: &str) -> Self {
+        lazy_static!{
+            static ref RE: Regex = Regex::new(r"Valve (.+) has flow rate=(\d+)").unwrap();
+        }
+        let cap = RE.captures(s).unwrap();
+        Self {
+            id: cap.get(1).unwrap().as_str().to_string(),
+            rate: cap.get(2).unwrap().as_str().parse().unwrap()
+        }
+    }
+}
+
+/// Renamed vec of valves
+#[derive(Debug)]
+struct Valves(Vec<Valve>);
+impl Valves {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+impl From<&str> for Valves {
+    /// From &str
+    /// 
+    /// # Arguments
+    /// * `s` - The puzzle input string
+    fn from(s: &str) -> Self {
+        let mut v = Vec::new();
+        for line in s.split('\n') {
+            v.push(line.into());
+        }
+        Self(v)
+    }
+}
+
+/// The edges in the valve graph (leading tunnels)
+#[derive(Debug)]
+struct Edge<'a> {
+    /// The edge from valve
+    from: &'a Valve,
+    /// to valve
+    to: &'a Valve
+}
+impl<'a> Edge<'a> {
+    /// Create new edges
+    /// 
+    /// Arguments
+    /// * `from` - The id of the valve from
+    /// * `to`- The id of the valve to
+    /// * `valves` - The valves the ids are in
+    fn new(from: &str, to: &str, valves: &'a Valves) -> Self {
+        Edge {
+            from: valves.0.iter().find(|el| el.id == from).unwrap(),
+            to: valves.0.iter().find(|el| el.id == to).unwrap()
+        }
+    }
+}
+/// Renamed vector if edges
+#[derive(Debug)]
+struct Edges<'a>(Vec<Edge<'a>>);
+impl<'a> Edges<'a> {
+    /// Create a new one
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+    /// Populate the edges with edges from the puzzle input
+    /// 
+    /// # Arguments
+    /// * `s` - The puzzle input
+    /// * `valves` - The valves also read from the puzzle input
+    fn populate(&mut self, s: &str, valves: &'a Valves) {
+        lazy_static!{
+            static ref RE: Regex = Regex::new(r"Valve (.+) has flow rate=\d+; tunnels* leads* to valves* (.+)$").unwrap();
+        }
+        for line in s.split('\n') {
+            let cap = RE.captures(line).unwrap();
+            let id = cap.get(1).unwrap().as_str();
+            let cons = cap.get(2).unwrap().as_str();
+            for con in cons.split(", ") {
+                self.0.push(Edge::new(id, con, valves));
+            }
+        }
+    }
+    /// Returns all edges from a specific valve
     /// 
     /// #Arguments
-    /// * `other` - The other position to calculate to
-    fn manhattan_distance(&self, other: &Self) -> i64 {
-        (other.x - self.x).abs() + (other.y - self.y).abs()
-    }
-    /// Calculate the tuning frequency of a position
-    fn determine_tuning_frequency(&self) -> i64 {
-        self.x * 4000000 + self.y
-    }
-}
-impl From<&str> for Position {
-    fn from(s: &str) -> Self {
-        lazy_static!{
-            static ref RE: Regex = Regex::new(r"x=([-\d]+), y=([-\d]+)").unwrap();
-        }
-        let cap = RE.captures(s).unwrap();
-        Self {
-            x: cap.get(1).unwrap().as_str().parse().unwrap(),
-            y: cap.get(2).unwrap().as_str().parse().unwrap()
-        }
-    }
-}
-impl Add for Position {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        Self {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y
-        }
-    }
-}
-impl AddAssign for Position {
-    fn add_assign(&mut self, rhs: Self) {
-        self.x += rhs.x;
-        self.y += rhs.y;
-    }
-}
-impl Sub for Position {
-    type Output = Self;
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y
-        }
-    }
-}
-impl Div<i64> for Position {
-    type Output = Self;
-    fn div(self, rhs: i64) -> Self::Output {
-        Self {
-            x: self.x / rhs,
-            y: self.y / rhs
-        }
-    }
-}
-impl Mul<i64> for Position {
-    type Output = Self;
-    fn mul(self, rhs: i64) -> Self::Output {
-        Self {
-            x: self.x * rhs,
-            y: self.y * rhs
-        }
-    }
-}
-impl Sum for Position {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut res = Position {x: 0, y: 0};
-        for i in iter {
-            res += i;
-        }
-        res
+    /// * `valve` - The valve to search for
+    fn get_edges_for_valve(&self, valve: &'a Valve) -> Vec<&Edge<'a>> {
+        self.0.iter().filter(|el| el.from == valve).collect()
     }
 }
 
-/// A sensor with its nearest found beacon
-struct Sensor {
-    /// The position of the beacon
-    position: Position,
-    /// The closest beacon to the sensor
-    closest_beacon: Position
+/// Release of pressure for a valve and from a time
+#[derive(Debug, Clone)]
+struct Release<'a> {
+    /// The time the release starts
+    t: usize,
+    /// The valve releasing pressure
+    valve: &'a Valve
 }
-impl Sensor {
-    /// Get the coverage of the sensor for a specific y coordinate
+/// Renamed vector of releases
+#[derive(Debug, Clone)]
+struct Releases<'a>(Vec<Release<'a>>);
+impl<'a> Releases<'a> {
+    /// New empty releases
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+    /// Increment the releases to a specific time
     /// 
     /// # Arguments
-    /// * `y` - The y coordinate to get the coverage for
+    /// * `t` - The time to increment to
     /// 
     /// # Returns
-    /// A vector with all covered positions
-    fn get_coverage_for(&self, y: i64) -> Vec<Position> {
-        let mut coverage = Vec::new();
-
-        let dis = self.position.manhattan_distance(&self.closest_beacon);
-
-        if (y - self.position.y).abs() > dis {
-            return coverage
+    /// The releases pressure until (inclusive) time t
+    fn increment_to_t(&self, t: usize) -> i32 {
+        let mut release = 0;
+        for dt in 1..=t {
+            release += self.0.iter().filter_map(|el| if dt >= el.t { Some(el.valve.rate) } else { None }).sum::<i32>();
         }
+        release
+    }
+}
+/// Node for use in the route optimization algorithms
+#[derive(Debug, Clone)]
+struct Node<'a> {
+    /// Valve of the node
+    valve: &'a Valve,
+    /// Is the valve open?
+    open: bool,
+    /// The current time
+    t: usize,
+    /// The releases of the route
+    releases: Releases<'a>,
+    /// The previous visited valves and if opened
+    previous: Vec<(&'a Valve, bool)>, // Valve, open
+    /// Indicates if this route is done
+    done: bool
+}
 
-        let mut pos = self.position;
-        pos.y = y;
-        for d in -dis..=dis {
-            pos.x = self.position.x + d;
-            if self.position.manhattan_distance(&pos) <= dis {
-                coverage.push(pos);
+/// Find an optimized route through the tunnels to release the most pressure.
+/// Using Dijkstra algorithm to find the best route but without stopping on a specific target.
+/// 
+/// # Arguments
+/// * `start_id` - The valve to start from
+/// * `valves` - The valves to optimize
+/// * `edges` - The connections between the valves to optimize over
+/// 
+/// # Returns
+/// The pressure released over the optimized route
+fn find_optimized_route<'a>(start_id: &str, valves: &Valves, edges: &Edges<'a>, time: usize) -> i32 {
+    let mut nodes: Vec<Node> = valves.0.iter().map(|el| Node {valve: el, releases: Releases::new(), open: false, t: usize::MAX, previous: Vec::new(), done: false}).collect();
+    nodes.extend(valves.0.iter().filter(|el| el.rate != 0).map(|el| Node {valve: el, releases: Releases::new(), open: true, t: usize::MAX, previous: Vec::new(), done: false}));
+    nodes.iter_mut().find(|el| el.valve.id == start_id).unwrap().t = 0;
+
+    loop {
+        let (connections, current_t, current_releases, new_current_previous) = {
+            let opt_node = nodes.iter_mut().filter(|el| !el.done).min_by(|a, b| a.releases.increment_to_t(time).cmp(&b.releases.increment_to_t(time)));
+            if let Some(node) = opt_node {
+                node.done = true;
+                if node.t >= time || node.t == usize::MAX { continue; }
+                let mut new_current_previous = node.previous.clone();
+                new_current_previous.push((node.valve, node.open));
+                (edges.get_edges_for_valve(node.valve), node.t, node.releases.clone(), new_current_previous)
             }
-        }
-
-        coverage
-    }
-    /// Check if a position is covered from the sensor
-    /// 
-    /// # Arguments
-    /// * `pos` - The position to check
-    fn is_covered(&self, pos: &Position) -> bool {
-        self.position.manhattan_distance(pos) <= self.position.manhattan_distance(&self.closest_beacon)
-    }
-    /// Get all positions directly outside of the coverage border
-    fn get_outside_border(&self) -> Vec<Position> {
-        let mut res = Vec::new();
-
-        let dis = self.position.manhattan_distance(&self.closest_beacon) + 1;
-        for dx in -dis..=dis {
-            res.push(Position {
-                x: self.position.x + dx,
-                y: self.position.y - (dis - dx.abs())
+            else { break; }
+        };
+        for edge in connections {
+            nodes.iter_mut().filter(|el| el.valve == edge.to).for_each(|el| {
+                if el.open && new_current_previous.iter().any(|v| v.0 == el.valve && v.1) {
+                    return
+                }
+                let new_t = current_t + if el.open { 2 } else { 1 };
+                let mut new_releases = current_releases.clone();
+                if el.open {
+                    new_releases.0.push(Release { t: new_t + 1, valve: el.valve });
+                }
+                let new_incremented_release = new_releases.increment_to_t(new_t + 1);
+                let incremented_release = el.releases.increment_to_t(new_t + 1);
+                if incremented_release < new_incremented_release || (new_t < el.t && incremented_release <= new_incremented_release) {
+                    el.done = false;
+                    el.t = new_t;
+                    el.releases = new_releases;
+                    el.previous = new_current_previous.clone();
+                }
             });
-            if dis - dx.abs() != 0 {
-                res.push(Position {
-                    x: self.position.x + dx,
-                    y: self.position.y + (dis - dx.abs())
-                });
-            }
         }
+    }
 
-        res
-    }
-}
-impl From<&str> for Sensor {
-    fn from(s: &str) -> Self {
-        lazy_static!{
-            static ref RE: Regex = Regex::new(r"Sensor at (x=[-\d]+, y=[-\d]+): closest beacon is at (x=[-\d]+, y=[-\d]+)").unwrap();
-        }
-        let cap = RE.captures(s).unwrap();
-        Self {
-            position: cap.get(1).unwrap().as_str().into(),
-            closest_beacon: cap.get(2).unwrap().as_str().into()
-        }
-    }
-}
-
-/// Renamed sensor array
-struct Sensors(Vec<Sensor>);
-impl Sensors {
-    /// Count the covered areas for all sensor on a specific y coordinate
-    /// 
-    /// # Arguments
-    /// * `y` - The get the coverage for
-    fn get_coverage_count_for(&self, y: i64) -> usize {
-        let beacons = self.0.iter().map(|el| el.closest_beacon).collect::<Vec<Position>>();
-        self.0.iter().flat_map(|el| el.get_coverage_for(y)).unique_by(|el| el.x).filter(|el| !beacons.iter().any(|e| e == el)).count()
-    }
-    /// Checks if a position is covered from any sensor
-    /// 
-    /// # Arguments
-    /// * `pos` - The position to check
-    fn is_covered(&self, pos: &Position) -> bool {
-        self.0.iter().any(|el| el.is_covered(pos))
-    }
-    /// Find a distress signal in an square area inside the specified position
-    /// 
-    /// # Arguments
-    /// * `from` - The start position of the square
-    /// * `to` - The inclusive end position of the square
-    fn find_distress_from_to(&self, from: &Position, to: &Position) -> Option<Position> {
-        self.0.iter().flat_map(|el| el.get_outside_border()).filter(|el| el.x >= from.x && el.x <= to.x && el.y >= from.y && el.y <= to.y).find(|el| !self.is_covered(el))
-    }
-}
-impl From<&str> for Sensors {
-    fn from(s: &str) -> Self {
-        let mut vec = Vec::new();
-        for l in s.split('\n') {
-            vec.push(l.into());
-        }
-        Self(vec)
-    }
+    nodes.iter().filter(|el| el.t <= time).map(|el| el.releases.increment_to_t(time)).max().unwrap()
 }
 
 
 fn main() {
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
-    
-    let sensors: Sensors = input.as_str().into();
-    println!("There are {} positions which can not contain a beacon", sensors.get_coverage_count_for(2000000));
-    println!("The tuning frequency for the distress signal is {}", sensors.find_distress_from_to(&Position { x: 0, y: 0 }, &Position { x: 4000000, y: 4000000 }).unwrap().determine_tuning_frequency())
+
+    let valves: Valves = input.as_str().into();
+    let mut edges = Edges::new();
+    edges.populate(input.as_str(), &valves);
+
+    println!("With the optimized route you can release {} pressure", find_optimized_route("AA", &valves, &edges, 30));
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::Sensors;
+    use crate::{Valves, Edges, find_optimized_route};
 
 
     #[test]
     fn check_against_example() {
-        let input = "Sensor at x=2, y=18: closest beacon is at x=-2, y=15
-Sensor at x=9, y=16: closest beacon is at x=10, y=16
-Sensor at x=13, y=2: closest beacon is at x=15, y=3
-Sensor at x=12, y=14: closest beacon is at x=10, y=16
-Sensor at x=10, y=20: closest beacon is at x=10, y=16
-Sensor at x=14, y=17: closest beacon is at x=10, y=16
-Sensor at x=8, y=7: closest beacon is at x=2, y=10
-Sensor at x=2, y=0: closest beacon is at x=2, y=10
-Sensor at x=0, y=11: closest beacon is at x=2, y=10
-Sensor at x=20, y=14: closest beacon is at x=25, y=17
-Sensor at x=17, y=20: closest beacon is at x=21, y=22
-Sensor at x=16, y=7: closest beacon is at x=15, y=3
-Sensor at x=14, y=3: closest beacon is at x=15, y=3
-Sensor at x=20, y=1: closest beacon is at x=15, y=3";
+        let input = "Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
+Valve BB has flow rate=13; tunnels lead to valves CC, AA
+Valve CC has flow rate=2; tunnels lead to valves DD, BB
+Valve DD has flow rate=20; tunnels lead to valves CC, AA, EE
+Valve EE has flow rate=3; tunnels lead to valves FF, DD
+Valve FF has flow rate=0; tunnels lead to valves EE, GG
+Valve GG has flow rate=0; tunnels lead to valves FF, HH
+Valve HH has flow rate=22; tunnel leads to valve GG
+Valve II has flow rate=0; tunnels lead to valves AA, JJ
+Valve JJ has flow rate=21; tunnel leads to valve II";
 
-        let sensors: Sensors = input.into();
-        assert_eq!(sensors.get_coverage_count_for(10), 26);
-        assert_eq!(sensors.find_distress_from_to(&crate::Position { x: 0, y: 0 }, &crate::Position { x: 20, y: 20 }).unwrap().determine_tuning_frequency(), 56000011);
+        let valves: Valves = input.into();
+        let mut edges = Edges::new();
+        edges.populate(input, &valves);
+        
+        assert_eq!(find_optimized_route("AA", &valves, &edges, 30), 1651);
     }
 }

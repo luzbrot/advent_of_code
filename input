@@ -1,26 +1,52 @@
-Sensor at x=2483411, y=3902983: closest beacon is at x=2289579, y=3633785
-Sensor at x=3429446, y=303715: closest beacon is at x=2876111, y=-261280
-Sensor at x=666423, y=3063763: closest beacon is at x=2264411, y=2779977
-Sensor at x=3021606, y=145606: closest beacon is at x=2876111, y=-261280
-Sensor at x=2707326, y=2596893: closest beacon is at x=2264411, y=2779977
-Sensor at x=3103704, y=1560342: closest beacon is at x=2551409, y=2000000
-Sensor at x=3497040, y=3018067: closest beacon is at x=3565168, y=2949938
-Sensor at x=1708530, y=855013: closest beacon is at x=2551409, y=2000000
-Sensor at x=3107437, y=3263465: closest beacon is at x=3404814, y=3120160
-Sensor at x=2155249, y=2476196: closest beacon is at x=2264411, y=2779977
-Sensor at x=3447897, y=3070850: closest beacon is at x=3404814, y=3120160
-Sensor at x=2643048, y=3390796: closest beacon is at x=2289579, y=3633785
-Sensor at x=3533132, y=3679388: closest beacon is at x=3404814, y=3120160
-Sensor at x=3683790, y=3017900: closest beacon is at x=3565168, y=2949938
-Sensor at x=1943208, y=3830506: closest beacon is at x=2289579, y=3633785
-Sensor at x=3940100, y=3979653: closest beacon is at x=2846628, y=4143786
-Sensor at x=3789719, y=1225738: closest beacon is at x=4072555, y=1179859
-Sensor at x=3939775, y=578381: closest beacon is at x=4072555, y=1179859
-Sensor at x=3880152, y=3327397: closest beacon is at x=3404814, y=3120160
-Sensor at x=3280639, y=2446475: closest beacon is at x=3565168, y=2949938
-Sensor at x=2348869, y=2240374: closest beacon is at x=2551409, y=2000000
-Sensor at x=3727441, y=2797456: closest beacon is at x=3565168, y=2949938
-Sensor at x=3973153, y=2034945: closest beacon is at x=4072555, y=1179859
-Sensor at x=38670, y=785556: closest beacon is at x=311084, y=-402911
-Sensor at x=3181909, y=2862960: closest beacon is at x=3565168, y=2949938
-Sensor at x=3099490, y=3946226: closest beacon is at x=2846628, y=4143786
+Valve AP has flow rate=0; tunnels lead to valves AA, ON
+Valve QN has flow rate=21; tunnels lead to valves RI, CG
+Valve LK has flow rate=0; tunnels lead to valves XM, AA
+Valve HA has flow rate=0; tunnels lead to valves WH, KF
+Valve DS has flow rate=16; tunnel leads to valve II
+Valve KD has flow rate=0; tunnels lead to valves KG, QB
+Valve JW has flow rate=0; tunnels lead to valves AD, KF
+Valve HU has flow rate=0; tunnels lead to valves UK, CO
+Valve AE has flow rate=10; tunnels lead to valves IR, PT, UV
+Valve XA has flow rate=0; tunnels lead to valves CG, EU
+Valve SE has flow rate=17; tunnels lead to valves YR, AD
+Valve TR has flow rate=0; tunnels lead to valves AL, CS
+Valve BS has flow rate=0; tunnels lead to valves YH, XM
+Valve IJ has flow rate=24; tunnels lead to valves XN, WE
+Valve AA has flow rate=0; tunnels lead to valves LK, AP, IZ, PC, QD
+Valve KG has flow rate=0; tunnels lead to valves KD, CS
+Valve QV has flow rate=0; tunnels lead to valves XM, II
+Valve PC has flow rate=0; tunnels lead to valves AA, YF
+Valve GJ has flow rate=20; tunnel leads to valve RI
+Valve UV has flow rate=0; tunnels lead to valves UK, AE
+Valve IR has flow rate=0; tunnels lead to valves EU, AE
+Valve EU has flow rate=13; tunnels lead to valves IR, DT, XA, ON
+Valve ED has flow rate=0; tunnels lead to valves XN, CO
+Valve DT has flow rate=0; tunnels lead to valves EU, UK
+Valve YE has flow rate=0; tunnels lead to valves XM, WS
+Valve AD has flow rate=0; tunnels lead to valves JW, SE
+Valve WE has flow rate=0; tunnels lead to valves IJ, NA
+Valve UK has flow rate=5; tunnels lead to valves UV, DT, QD, HU
+Valve YR has flow rate=0; tunnels lead to valves OS, SE
+Valve II has flow rate=0; tunnels lead to valves QV, DS
+Valve GT has flow rate=0; tunnels lead to valves CS, MN
+Valve YH has flow rate=0; tunnels lead to valves BS, QB
+Valve BQ has flow rate=0; tunnels lead to valves XM, KF
+Valve OS has flow rate=0; tunnels lead to valves YR, NA
+Valve WH has flow rate=0; tunnels lead to valves QB, HA
+Valve QB has flow rate=4; tunnels lead to valves WH, KD, YH, IZ
+Valve ON has flow rate=0; tunnels lead to valves AP, EU
+Valve IZ has flow rate=0; tunnels lead to valves AA, QB
+Valve MN has flow rate=25; tunnel leads to valve GT
+Valve CG has flow rate=0; tunnels lead to valves XA, QN
+Valve QD has flow rate=0; tunnels lead to valves UK, AA
+Valve AL has flow rate=0; tunnels lead to valves KF, TR
+Valve XN has flow rate=0; tunnels lead to valves ED, IJ
+Valve WS has flow rate=0; tunnels lead to valves YE, CS
+Valve CO has flow rate=18; tunnels lead to valves ED, PT, HU
+Valve PT has flow rate=0; tunnels lead to valves CO, AE
+Valve RI has flow rate=0; tunnels lead to valves QN, GJ
+Valve CS has flow rate=9; tunnels lead to valves YF, GT, WS, TR, KG
+Valve YF has flow rate=0; tunnels lead to valves PC, CS
+Valve NA has flow rate=23; tunnels lead to valves OS, WE
+Valve KF has flow rate=12; tunnels lead to valves HA, AL, JW, BQ
+Valve XM has flow rate=3; tunnels lead to valves LK, QV, YE, BS, BQ
