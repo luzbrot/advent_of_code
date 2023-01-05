@@ -1,226 +1,345 @@
-# Day 16: Proboscidea Volcanium
+# Day 17: Pyroclastic Flow
 
-The sensors have led you to the origin of the distress signal: yet another handheld device, just like the one the Elves gave you. However, you don't see any Elves around; instead, the device is surrounded by elephants! They must have gotten lost in these tunnels, and one of the elephants apparently figured out how to turn on the distress signal.
+Your handheld device has located an alternative exit from the cave for you and the elephants. The ground is rumbling almost continuously now, but the strange valves bought you some time. It's definitely getting warmer in here, though.
 
-The ground rumbles again, much stronger this time. What kind of cave is this, exactly? You scan the cave with your handheld device; it reports mostly igneous rock, some ash, pockets of pressurized gas, magma... this isn't just a cave, it's a volcano!
+The tunnels eventually open into a very tall, narrow chamber. Large, oddly-shaped rocks are falling into the chamber from above, presumably due to all the rumbling. If you can't work out where the rocks will fall next, you might be crushed!
 
-You need to get the elephants out of here, quickly. Your device estimates that you have 30 minutes before the volcano erupts, so you don't have time to go back out the way you came in.
-
-You scan the cave for other options and discover a network of pipes and pressure-release valves. You aren't sure how such a system got into a volcano, but you don't have time to complain; your device produces a report (your puzzle input) of each valve's flow rate if it were opened (in pressure per minute) and the tunnels you could use to move between the valves.
-
-There's even a valve in the room you and the elephants are currently standing in labeled `AA`. You estimate it will take you one minute to open a single valve and one minute to follow any tunnel from one valve to another. What is the most pressure you could release?
-
-For example, suppose you had the following scan output:
+The five types of rocks have the following peculiar shapes, where `#` is rock and `.` is empty space:
 ```
-Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
-Valve BB has flow rate=13; tunnels lead to valves CC, AA
-Valve CC has flow rate=2; tunnels lead to valves DD, BB
-Valve DD has flow rate=20; tunnels lead to valves CC, AA, EE
-Valve EE has flow rate=3; tunnels lead to valves FF, DD
-Valve FF has flow rate=0; tunnels lead to valves EE, GG
-Valve GG has flow rate=0; tunnels lead to valves FF, HH
-Valve HH has flow rate=22; tunnel leads to valve GG
-Valve II has flow rate=0; tunnels lead to valves AA, JJ
-Valve JJ has flow rate=21; tunnel leads to valve II
+####
+
+.#.
+###
+.#.
+
+..#
+..#
+###
+
+#
+#
+#
+#
+
+##
+##
 ```
-All of the valves begin closed. You start at valve `AA`, but it must be damaged or jammed or something: its flow rate is `0`, so there's no point in opening it. However, you could spend one minute moving to valve `BB` and another minute opening it; doing so would release pressure during the remaining `28` minutes at a flow rate of `13`, a total eventual pressure release of `28 * 13 = 364`. Then, you could spend your third minute moving to valve `CC` and your fourth minute opening it, providing an additional `26` minutes of eventual pressure release at a flow rate of `2`, or `52` total pressure released by valve CC.
+The rocks fall in the order shown above: first the `-` shape, then the `+` shape, and so on. Once the end of the list is reached, the same order repeats: the `-` shape falls first, sixth, 11th, 16th, etc.
 
-Making your way through the tunnels like this, you could probably open many or all of the valves by the time `30` minutes have elapsed. However, you need to release as much pressure as possible, so you'll need to be methodical. Instead, consider this approach:
+The rocks don't spin, but they do get pushed around by jets of hot gas coming out of the walls themselves. A quick scan reveals the effect the jets of hot gas will have on the rocks as they fall (your puzzle input).
+
+For example, suppose this was the jet pattern in your cave:
 ```
-== Minute 1 ==
-No valves are open.
-You move to valve DD.
-
-== Minute 2 ==
-No valves are open.
-You open valve DD.
-
-== Minute 3 ==
-Valve DD is open, releasing 20 pressure.
-You move to valve CC.
-
-== Minute 4 ==
-Valve DD is open, releasing 20 pressure.
-You move to valve BB.
-
-== Minute 5 ==
-Valve DD is open, releasing 20 pressure.
-You open valve BB.
-
-== Minute 6 ==
-Valves BB and DD are open, releasing 33 pressure.
-You move to valve AA.
-
-== Minute 7 ==
-Valves BB and DD are open, releasing 33 pressure.
-You move to valve II.
-
-== Minute 8 ==
-Valves BB and DD are open, releasing 33 pressure.
-You move to valve JJ.
-
-== Minute 9 ==
-Valves BB and DD are open, releasing 33 pressure.
-You open valve JJ.
-
-== Minute 10 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve II.
-
-== Minute 11 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve AA.
-
-== Minute 12 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve DD.
-
-== Minute 13 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve EE.
-
-== Minute 14 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve FF.
-
-== Minute 15 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve GG.
-
-== Minute 16 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You move to valve HH.
-
-== Minute 17 ==
-Valves BB, DD, and JJ are open, releasing 54 pressure.
-You open valve HH.
-
-== Minute 18 ==
-Valves BB, DD, HH, and JJ are open, releasing 76 pressure.
-You move to valve GG.
-
-== Minute 19 ==
-Valves BB, DD, HH, and JJ are open, releasing 76 pressure.
-You move to valve FF.
-
-== Minute 20 ==
-Valves BB, DD, HH, and JJ are open, releasing 76 pressure.
-You move to valve EE.
-
-== Minute 21 ==
-Valves BB, DD, HH, and JJ are open, releasing 76 pressure.
-You open valve EE.
-
-== Minute 22 ==
-Valves BB, DD, EE, HH, and JJ are open, releasing 79 pressure.
-You move to valve DD.
-
-== Minute 23 ==
-Valves BB, DD, EE, HH, and JJ are open, releasing 79 pressure.
-You move to valve CC.
-
-== Minute 24 ==
-Valves BB, DD, EE, HH, and JJ are open, releasing 79 pressure.
-You open valve CC.
-
-== Minute 25 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-== Minute 26 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-== Minute 27 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-== Minute 28 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-== Minute 29 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-== Minute 30 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
+>>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>
 ```
-This approach lets you release the most pressure possible in `30` minutes with this valve layout, `1651`.
+In jet patterns, `<` means a push to the left, while `>` means a push to the right. The pattern above means that the jets will push a falling rock right, then right, then right, then left, then left, then right, and so on. If the end of the list is reached, it repeats.
 
-Work out the steps to release the most pressure in `30` minutes. What is the most pressure you can release?
+The tall, vertical chamber is exactly seven units wide. Each rock appears so that its left edge is two units away from the left wall and its bottom edge is three units above the highest rock in the room (or the floor, if there isn't one).
+
+After a rock appears, it alternates between being pushed by a jet of hot gas one unit (in the direction indicated by the next symbol in the jet pattern) and then falling one unit down. If any movement would cause any part of the rock to move into the walls, floor, or a stopped rock, the movement instead does not occur. If a downward movement would have caused a falling rock to move into the floor or an already-fallen rock, the falling rock stops where it is (having landed on something) and a new rock immediately begins falling.
+
+Drawing falling rocks with `@` and stopped rocks with `#`, the jet pattern in the example above manifests as follows:
+
+```
+The first rock begins falling:
+|..@@@@.|
+|.......|
+|.......|
+|.......|
++-------+
+
+Jet of gas pushes rock right:
+|...@@@@|
+|.......|
+|.......|
+|.......|
++-------+
+
+Rock falls 1 unit:
+|...@@@@|
+|.......|
+|.......|
++-------+
+
+Jet of gas pushes rock right, but nothing happens:
+|...@@@@|
+|.......|
+|.......|
++-------+
+
+Rock falls 1 unit:
+|...@@@@|
+|.......|
++-------+
+
+Jet of gas pushes rock right, but nothing happens:
+|...@@@@|
+|.......|
++-------+
+
+Rock falls 1 unit:
+|...@@@@|
++-------+
+
+Jet of gas pushes rock left:
+|..@@@@.|
++-------+
+
+Rock falls 1 unit, causing it to come to rest:
+|..####.|
++-------+
+
+A new rock begins falling:
+|...@...|
+|..@@@..|
+|...@...|
+|.......|
+|.......|
+|.......|
+|..####.|
++-------+
+
+Jet of gas pushes rock left:
+|..@....|
+|.@@@...|
+|..@....|
+|.......|
+|.......|
+|.......|
+|..####.|
++-------+
+
+Rock falls 1 unit:
+|..@....|
+|.@@@...|
+|..@....|
+|.......|
+|.......|
+|..####.|
++-------+
+
+Jet of gas pushes rock right:
+|...@...|
+|..@@@..|
+|...@...|
+|.......|
+|.......|
+|..####.|
++-------+
+
+Rock falls 1 unit:
+|...@...|
+|..@@@..|
+|...@...|
+|.......|
+|..####.|
++-------+
+
+Jet of gas pushes rock left:
+|..@....|
+|.@@@...|
+|..@....|
+|.......|
+|..####.|
++-------+
+
+Rock falls 1 unit:
+|..@....|
+|.@@@...|
+|..@....|
+|..####.|
++-------+
+
+Jet of gas pushes rock right:
+|...@...|
+|..@@@..|
+|...@...|
+|..####.|
++-------+
+
+Rock falls 1 unit, causing it to come to rest:
+|...#...|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+A new rock begins falling:
+|....@..|
+|....@..|
+|..@@@..|
+|.......|
+|.......|
+|.......|
+|...#...|
+|..###..|
+|...#...|
+|..####.|
++-------+
+The moment each of the next few rocks begins falling, you would see this:
+
+|..@....|
+|..@....|
+|..@....|
+|..@....|
+|.......|
+|.......|
+|.......|
+|..#....|
+|..#....|
+|####...|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|..@@...|
+|..@@...|
+|.......|
+|.......|
+|.......|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|..@@@@.|
+|.......|
+|.......|
+|.......|
+|....##.|
+|....##.|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|...@...|
+|..@@@..|
+|...@...|
+|.......|
+|.......|
+|.......|
+|.####..|
+|....##.|
+|....##.|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|....@..|
+|....@..|
+|..@@@..|
+|.......|
+|.......|
+|.......|
+|..#....|
+|.###...|
+|..#....|
+|.####..|
+|....##.|
+|....##.|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|..@....|
+|..@....|
+|..@....|
+|..@....|
+|.......|
+|.......|
+|.......|
+|.....#.|
+|.....#.|
+|..####.|
+|.###...|
+|..#....|
+|.####..|
+|....##.|
+|....##.|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|..@@...|
+|..@@...|
+|.......|
+|.......|
+|.......|
+|....#..|
+|....#..|
+|....##.|
+|....##.|
+|..####.|
+|.###...|
+|..#....|
+|.####..|
+|....##.|
+|....##.|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+
+|..@@@@.|
+|.......|
+|.......|
+|.......|
+|....#..|
+|....#..|
+|....##.|
+|##..##.|
+|######.|
+|.###...|
+|..#....|
+|.####..|
+|....##.|
+|....##.|
+|....#..|
+|..#.#..|
+|..#.#..|
+|#####..|
+|..###..|
+|...#...|
+|..####.|
++-------+
+```
+To prove to the elephants your simulation is accurate, they want to know how tall the tower will get after `2022` rocks have stopped (but before the 2023rd rock begins falling). In this example, the tower of rocks will be `3068` units tall.
+
+How many units tall will the tower of rocks be after `2022` rocks have stopped falling?
 
 
 ## Part Two
-You're worried that even with an optimal approach, the pressure released won't be enough. What if you got one of the elephants to help you?
+The elephants are not impressed by your simulation. They demand to know how tall the tower will be after `1000000000000` rocks have stopped! Only then will they feel confident enough to proceed through the cave.
 
-It would take you 4 minutes to teach an elephant how to open the right valves in the right order, leaving you with only 26 minutes to actually execute your plan. Would having two of you working together be better, even if it means having less time? (Assume that you teach the elephant before opening any valves yourself, giving you both the same full 26 minutes.)
+In the example above, the tower would be `1514285714288` units tall!
 
-In the example above, you could teach the elephant to help you as follows:
-```
-== Minute 1 ==
-No valves are open.
-You move to valve II.
-The elephant moves to valve DD.
-
-== Minute 2 ==
-No valves are open.
-You move to valve JJ.
-The elephant opens valve DD.
-
-== Minute 3 ==
-Valve DD is open, releasing 20 pressure.
-You open valve JJ.
-The elephant moves to valve EE.
-
-== Minute 4 ==
-Valves DD and JJ are open, releasing 41 pressure.
-You move to valve II.
-The elephant moves to valve FF.
-
-== Minute 5 ==
-Valves DD and JJ are open, releasing 41 pressure.
-You move to valve AA.
-The elephant moves to valve GG.
-
-== Minute 6 ==
-Valves DD and JJ are open, releasing 41 pressure.
-You move to valve BB.
-The elephant moves to valve HH.
-
-== Minute 7 ==
-Valves DD and JJ are open, releasing 41 pressure.
-You open valve BB.
-The elephant opens valve HH.
-
-== Minute 8 ==
-Valves BB, DD, HH, and JJ are open, releasing 76 pressure.
-You move to valve CC.
-The elephant moves to valve GG.
-
-== Minute 9 ==
-Valves BB, DD, HH, and JJ are open, releasing 76 pressure.
-You open valve CC.
-The elephant moves to valve FF.
-
-== Minute 10 ==
-Valves BB, CC, DD, HH, and JJ are open, releasing 78 pressure.
-The elephant moves to valve EE.
-
-== Minute 11 ==
-Valves BB, CC, DD, HH, and JJ are open, releasing 78 pressure.
-The elephant opens valve EE.
-
-(At this point, all valves are open.)
-
-== Minute 12 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-...
-
-== Minute 20 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-
-...
-
-== Minute 26 ==
-Valves BB, CC, DD, EE, HH, and JJ are open, releasing 81 pressure.
-```
-With the elephant helping, after 26 minutes, the best you could do would release a total of `1707` pressure.
-
-With you and an elephant working together for 26 minutes, what is the most pressure you could release?
+How tall will the tower be after `1000000000000` rocks have stopped?

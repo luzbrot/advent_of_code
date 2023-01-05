@@ -1,243 +1,293 @@
-use std::fs;
-use regex::Regex;
-#[macro_use]
-extern crate lazy_static;
+use std::{fs, collections::LinkedList, fmt::Display};
 
 
-/// A Valve
-#[derive(Debug, PartialEq, Eq)]
-struct Valve {
-    /// Id of the valve
-    id: String,
-    /// The pressure release rate of the valve
-    rate: i32
+/// Indicates the force a stone can be pushed
+#[derive(Debug, Clone, Copy)]
+enum Force {
+    Left,
+    Right
 }
-impl From<&str> for Valve {
+impl From<char> for Force {
+    fn from(c: char) -> Self {
+        match c {
+            '<' => Self::Left,
+            '>' => Self::Right,
+            _ => panic!("Unknown force!")
+        }
+    }
+}
+
+/// Iterator over the forces (Puzzle input).
+/// Will repeat for ever.
+#[derive(Clone)]
+struct ForceIterator {
+    /// The forces defined by the input
+    forces: Vec<Force>,
+    /// The current state of the iterator
+    state: usize
+}
+impl From<&str> for ForceIterator {
     fn from(s: &str) -> Self {
-        lazy_static!{
-            static ref RE: Regex = Regex::new(r"Valve (.+) has flow rate=(\d+)").unwrap();
+        let mut forces = Vec::new();
+        for c in s.chars() {
+            forces.push(c.into());
         }
-        let cap = RE.captures(s).unwrap();
-        Self {
-            id: cap.get(1).unwrap().as_str().to_string(),
-            rate: cap.get(2).unwrap().as_str().parse().unwrap()
+        Self { forces, state: 0 }
+    }
+}
+impl Iterator for ForceIterator {
+    type Item = Force;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = Some(self.forces[self.state]);
+        self.state = (self.state + 1) % self.forces.len();
+        item
+    }
+}
+
+/// Enum for a block of space 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Space {
+    Stone,
+    Air
+}
+impl Display for Space {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Space::Stone => write!(f, "#"),
+            Space::Air => write!(f, ".")
         }
     }
 }
 
-/// Renamed vec of valves
-#[derive(Debug)]
-struct Valves(Vec<Valve>);
-impl Valves {
-    fn new() -> Self {
-        Self(Vec::new())
+
+#[derive(Clone)]
+/// A stone with a shape
+struct Stone {
+    /// 2D shape of the the stone.
+    /// [y][x]
+    shape: Vec<Vec<Space>>
+}
+impl Stone {
+    fn get_height(&self) -> usize {
+        self.shape.len()
+    }
+    /// Returns
+    /// ####
+    fn h_line() -> Self {
+        Stone {
+            shape: vec![vec![Space::Stone; 4]]
+        }
+    }
+    /// Returns
+    /// .#.
+    /// ###
+    /// .#.
+    fn cross() -> Self {
+        Stone {
+            shape: vec![
+                vec![Space::Air, Space::Stone, Space::Air],
+                vec![Space::Stone, Space::Stone, Space::Stone],
+                vec![Space::Air, Space::Stone, Space::Air]
+            ]
+        }
+    }
+    /// Returns
+    /// ..#
+    /// ..#
+    /// ###
+    fn reverse_l() -> Self {
+        Stone {
+            shape: vec![
+                vec![Space::Air, Space::Air, Space::Stone],
+                vec![Space::Air, Space::Air, Space::Stone],
+                vec![Space::Stone, Space::Stone, Space::Stone]
+            ]
+        }
+    }
+    /// Returns
+    /// #
+    /// #
+    /// #
+    /// #
+    fn v_line() -> Self {
+        Stone {
+            shape: vec![vec![Space::Stone]; 4]
+        }
+    }
+    /// Returns
+    /// ##
+    /// ##
+    fn block() -> Self {
+        Stone {
+            shape: vec![vec![Space::Stone; 2]; 2]
+        }
+    }
+    /// Returns a iterator over the stones in the correct order indefinitely
+    fn stones() -> impl Iterator<Item = Stone> {
+        let mut state = 4;
+        std::iter::repeat_with(move || {
+            state = (state + 1) % 5;
+            match state {
+                0 => Stone::h_line(),
+                1 => Stone::cross(),
+                2 => Stone::reverse_l(),
+                3 => Stone::v_line(),
+                4 => Stone::block(),
+                _ => panic!("Should not happen!")
+            }
+        })
     }
 }
-impl From<&str> for Valves {
-    /// From &str
+
+/// The world the blocks will land in
+struct World {
+    /// The spaces in the world.
+    /// Empty lines are to be assumed to be air
+    /// [y][x]
+    spaces: LinkedList<[Space; 7]>
+}
+impl World {
+    /// New World
+    fn new() -> Self {
+        Self { spaces: LinkedList::new() }
+    }
+    /// Spawn new stones in the world
     /// 
     /// # Arguments
-    /// * `s` - The puzzle input string
-    fn from(s: &str) -> Self {
-        let mut v = Vec::new();
-        for line in s.split('\n') {
-            v.push(line.into());
-        }
-        Self(v)
-    }
-}
+    /// * `stones` - Stones to spawn. Should at least yield `stone_count` stones
+    /// * `forces` - Forces to apply to the falling stones. Should yield indefinitely
+    /// * `stone_count`- The number of stones to spawn
+    fn spawn_until(&mut self, stones: impl Iterator<Item = Stone>, mut forces: impl Iterator<Item = Force>, stone_count: usize) {
+        for (count, stone) in stones.enumerate() {
+            if count >= stone_count { break; }
 
-/// The edges in the valve graph (leading tunnels)
-#[derive(Debug)]
-struct Edge<'a> {
-    /// The edge from valve
-    from: &'a Valve,
-    /// to valve
-    to: &'a Valve
-}
-impl<'a> Edge<'a> {
-    /// Create new edges
-    /// 
-    /// Arguments
-    /// * `from` - The id of the valve from
-    /// * `to`- The id of the valve to
-    /// * `valves` - The valves the ids are in
-    fn new(from: &str, to: &str, valves: &'a Valves) -> Self {
-        Edge {
-            from: valves.0.iter().find(|el| el.id == from).unwrap(),
-            to: valves.0.iter().find(|el| el.id == to).unwrap()
-        }
+            let mut stone_x = 2;
+            let mut stone_y = -(3 + stone.get_height() as i32);
+
+            loop {
+                let force = forces.next().unwrap();
+                match force {
+                    Force::Left => {
+                        if !self.does_stone_collide(&stone, stone_x - 1, stone_y) {
+                            stone_x -= 1;
+                        }
+                    },
+                    Force::Right => {
+                        if !self.does_stone_collide(&stone, stone_x + 1, stone_y) {
+                            stone_x += 1;
+                        }
+                    }
+                }
+                if !self.does_stone_collide(&stone, stone_x, stone_y + 1) {
+                    stone_y += 1;
+                }
+                else {
+                    break;
+                }
+            }
+
+            self.add_stone(stone, stone_x, stone_y);
+        } 
     }
-}
-/// Renamed vector if edges
-#[derive(Debug)]
-struct Edges<'a>(Vec<Edge<'a>>);
-impl<'a> Edges<'a> {
-    /// Create a new one
-    fn new() -> Self {
-        Self(Vec::new())
-    }
-    /// Populate the edges with edges from the puzzle input
+    /// Checks if a Stone collides an a specified position with anything
     /// 
     /// # Arguments
-    /// * `s` - The puzzle input
-    /// * `valves` - The valves also read from the puzzle input
-    fn populate(&mut self, s: &str, valves: &'a Valves) {
-        lazy_static!{
-            static ref RE: Regex = Regex::new(r"Valve (.+) has flow rate=\d+; tunnels* leads* to valves* (.+)$").unwrap();
+    /// * `stone`- The stone to check
+    /// * `x` - The x position of the stone
+    /// * `y` - The y position of the stone
+    fn does_stone_collide(&self, stone: &Stone, x: i32, y: i32) -> bool {
+        for (stone_y, stone_row) in stone.shape.iter().enumerate() {
+            let world_y = y + stone_y as i32;
+            for (stone_x, stone_space) in stone_row.iter().enumerate() {
+                if *stone_space == Space::Air { continue; }
+                let world_x = x + stone_x as i32;
+                if !(0..7).contains(&world_x) { return true } // outside of bounds
+
+                if world_y < 0 { continue; }
+                if let Some(world_row) = self.spaces.iter().nth(world_y as usize) {
+                    if world_row[world_x as usize] != Space::Air {
+                        return true
+                    }
+                }
+                else {
+                    // Below bedrock
+                    return true
+                }
+            }
         }
-        for line in s.split('\n') {
-            let cap = RE.captures(line).unwrap();
-            let id = cap.get(1).unwrap().as_str();
-            let cons = cap.get(2).unwrap().as_str();
-            for con in cons.split(", ") {
-                self.0.push(Edge::new(id, con, valves));
+        false
+    }
+    /// Add a stone to the world
+    /// 
+    /// # Arguments
+    /// * `stone` - The stone to add
+    /// * `x` - The x position of the stone
+    /// * `y` - The y position of the stone
+    fn add_stone(&mut self, stone: Stone, x: i32, mut y: i32) {
+        while y < 0 {
+            self.spaces.push_front([Space::Air; 7]);
+            y += 1;
+        }
+
+        for (stone_y, stone_row) in stone.shape.iter().enumerate() {
+            let world_y = y + stone_y as i32;
+            for (stone_x, stone_space) in stone_row.iter().enumerate() {
+                if *stone_space == Space::Air { continue; }
+                let world_x = x + stone_x as i32;
+                if !(0..7).contains(&world_x) { continue; } // outside of bounds
+                if let Some(world_row) = self.spaces.iter_mut().nth(world_y as usize) {
+                    world_row[world_x as usize] = *stone_space;
+                }
+                else {
+                    // Below bedrock
+                    continue;
+                }
             }
         }
     }
-    /// Returns all edges from a specific valve
-    /// 
-    /// #Arguments
-    /// * `valve` - The valve to search for
-    fn get_edges_for_valve(&self, valve: &'a Valve) -> Vec<&Edge<'a>> {
-        self.0.iter().filter(|el| el.from == valve).collect()
+    /// Returns the height of the stone tower in the world
+    fn get_height_of_stones(&self) -> usize {
+        self.spaces.len()
     }
 }
-
-/// Release of pressure for a valve and from a time
-#[derive(Debug, Clone)]
-struct Release<'a> {
-    /// The time the release starts
-    t: usize,
-    /// The valve releasing pressure
-    valve: &'a Valve
-}
-/// Renamed vector of releases
-#[derive(Debug, Clone)]
-struct Releases<'a>(Vec<Release<'a>>);
-impl<'a> Releases<'a> {
-    /// New empty releases
-    fn new() -> Self {
-        Self(Vec::new())
-    }
-    /// Increment the releases to a specific time
-    /// 
-    /// # Arguments
-    /// * `t` - The time to increment to
-    /// 
-    /// # Returns
-    /// The releases pressure until (inclusive) time t
-    fn increment_to_t(&self, t: usize) -> i32 {
-        let mut release = 0;
-        for dt in 1..=t {
-            release += self.0.iter().filter_map(|el| if dt >= el.t { Some(el.valve.rate) } else { None }).sum::<i32>();
-        }
-        release
-    }
-}
-/// Node for use in the route optimization algorithms
-#[derive(Debug, Clone)]
-struct Node<'a> {
-    /// Valve of the node
-    valve: &'a Valve,
-    /// Is the valve open?
-    open: bool,
-    /// The current time
-    t: usize,
-    /// The releases of the route
-    releases: Releases<'a>,
-    /// The previous visited valves and if opened
-    previous: Vec<(&'a Valve, bool)>, // Valve, open
-    /// Indicates if this route is done
-    done: bool
-}
-
-/// Find an optimized route through the tunnels to release the most pressure.
-/// Using Dijkstra algorithm to find the best route but without stopping on a specific target.
-/// 
-/// # Arguments
-/// * `start_id` - The valve to start from
-/// * `valves` - The valves to optimize
-/// * `edges` - The connections between the valves to optimize over
-/// 
-/// # Returns
-/// The pressure released over the optimized route
-fn find_optimized_route<'a>(start_id: &str, valves: &Valves, edges: &Edges<'a>, time: usize) -> i32 {
-    let mut nodes: Vec<Node> = valves.0.iter().map(|el| Node {valve: el, releases: Releases::new(), open: false, t: usize::MAX, previous: Vec::new(), done: false}).collect();
-    nodes.extend(valves.0.iter().filter(|el| el.rate != 0).map(|el| Node {valve: el, releases: Releases::new(), open: true, t: usize::MAX, previous: Vec::new(), done: false}));
-    nodes.iter_mut().find(|el| el.valve.id == start_id).unwrap().t = 0;
-
-    loop {
-        let (connections, current_t, current_releases, new_current_previous) = {
-            let opt_node = nodes.iter_mut().filter(|el| !el.done).min_by(|a, b| a.releases.increment_to_t(time).cmp(&b.releases.increment_to_t(time)));
-            if let Some(node) = opt_node {
-                node.done = true;
-                if node.t >= time || node.t == usize::MAX { continue; }
-                let mut new_current_previous = node.previous.clone();
-                new_current_previous.push((node.valve, node.open));
-                (edges.get_edges_for_valve(node.valve), node.t, node.releases.clone(), new_current_previous)
+impl Display for World {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut res = "".to_string();
+        for row in self.spaces.iter() {
+            for space in row.iter() {
+                res += format!("{}", space).as_str();
             }
-            else { break; }
-        };
-        for edge in connections {
-            nodes.iter_mut().filter(|el| el.valve == edge.to).for_each(|el| {
-                if el.open && new_current_previous.iter().any(|v| v.0 == el.valve && v.1) {
-                    return
-                }
-                let new_t = current_t + if el.open { 2 } else { 1 };
-                let mut new_releases = current_releases.clone();
-                if el.open {
-                    new_releases.0.push(Release { t: new_t + 1, valve: el.valve });
-                }
-                let new_incremented_release = new_releases.increment_to_t(new_t + 1);
-                let incremented_release = el.releases.increment_to_t(new_t + 1);
-                if incremented_release < new_incremented_release || (new_t < el.t && incremented_release <= new_incremented_release) {
-                    el.done = false;
-                    el.t = new_t;
-                    el.releases = new_releases;
-                    el.previous = new_current_previous.clone();
-                }
-            });
+            res += "\n";
         }
+        write!(f, "{}", res)
     }
-
-    nodes.iter().filter(|el| el.t <= time).map(|el| el.releases.increment_to_t(time)).max().unwrap()
 }
-
 
 fn main() {
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
 
-    let valves: Valves = input.as_str().into();
-    let mut edges = Edges::new();
-    edges.populate(input.as_str(), &valves);
+    let forces: ForceIterator = input.as_str().into();
+    let mut world = World::new();
+    let stones = Stone::stones();
+    world.spawn_until(stones, forces, 2022);
 
-    println!("With the optimized route you can release {} pressure", find_optimized_route("AA", &valves, &edges, 30));
+    println!("The tower of stones is {} height", world.get_height_of_stones());
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::{Valves, Edges, find_optimized_route};
+    use crate::{ForceIterator, World, Stone};
 
 
     #[test]
     fn check_against_example() {
-        let input = "Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
-Valve BB has flow rate=13; tunnels lead to valves CC, AA
-Valve CC has flow rate=2; tunnels lead to valves DD, BB
-Valve DD has flow rate=20; tunnels lead to valves CC, AA, EE
-Valve EE has flow rate=3; tunnels lead to valves FF, DD
-Valve FF has flow rate=0; tunnels lead to valves EE, GG
-Valve GG has flow rate=0; tunnels lead to valves FF, HH
-Valve HH has flow rate=22; tunnel leads to valve GG
-Valve II has flow rate=0; tunnels lead to valves AA, JJ
-Valve JJ has flow rate=21; tunnel leads to valve II";
+        let input = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
 
-        let valves: Valves = input.into();
-        let mut edges = Edges::new();
-        edges.populate(input, &valves);
-        
-        assert_eq!(find_optimized_route("AA", &valves, &edges, 30), 1651);
+        let forces: ForceIterator = input.into();
+        let mut world = World::new();
+        world.spawn_until(Stone::stones(), forces, 2022);
+        assert_eq!(world.get_height_of_stones(), 3068);
     }
 }
