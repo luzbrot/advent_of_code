@@ -1,345 +1,40 @@
-# Day 17: Pyroclastic Flow
+# Day 1: Trebuchet?!
+Something is wrong with global snow production, and you've been selected to take a look. The Elves have even given you a map; on it, they've used stars to mark the top fifty locations that are likely to be having problems.
 
-Your handheld device has located an alternative exit from the cave for you and the elephants. The ground is rumbling almost continuously now, but the strange valves bought you some time. It's definitely getting warmer in here, though.
+You've been doing this long enough to know that to restore snow operations, you need to check all fifty stars by December 25th.
 
-The tunnels eventually open into a very tall, narrow chamber. Large, oddly-shaped rocks are falling into the chamber from above, presumably due to all the rumbling. If you can't work out where the rocks will fall next, you might be crushed!
+Collect stars by solving puzzles. Two puzzles will be made available on each day in the Advent calendar; the second puzzle is unlocked when you complete the first. Each puzzle grants one star. Good luck!
 
-The five types of rocks have the following peculiar shapes, where `#` is rock and `.` is empty space:
+You try to ask why they can't just use a weather machine ("not powerful enough") and where they're even sending you ("the sky") and why your map looks mostly blank ("you sure ask a lot of questions") and hang on did you just say the sky ("of course, where do you think snow comes from") when you realize that the Elves are already loading you into a trebuchet ("please hold still, we need to strap you in").
+
+As they're making the final adjustments, they discover that their calibration document (your puzzle input) has been amended by a very young Elf who was apparently just excited to show off her art skills. Consequently, the Elves are having trouble reading the values on the document.
+
+The newly-improved calibration document consists of lines of text; each line originally contained a specific calibration value that the Elves now need to recover. On each line, the calibration value can be found by combining the first digit and the last digit (in that order) to form a single two-digit number.
+
+For example:
 ```
-####
-
-.#.
-###
-.#.
-
-..#
-..#
-###
-
-#
-#
-#
-#
-
-##
-##
+1abc2
+pqr3stu8vwx
+a1b2c3d4e5f
+treb7uchet
 ```
-The rocks fall in the order shown above: first the `-` shape, then the `+` shape, and so on. Once the end of the list is reached, the same order repeats: the `-` shape falls first, sixth, 11th, 16th, etc.
+In this example, the calibration values of these four lines are `12`, `38`, `15`, and `77`. Adding these together produces `142`.
 
-The rocks don't spin, but they do get pushed around by jets of hot gas coming out of the walls themselves. A quick scan reveals the effect the jets of hot gas will have on the rocks as they fall (your puzzle input).
-
-For example, suppose this was the jet pattern in your cave:
-```
->>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>
-```
-In jet patterns, `<` means a push to the left, while `>` means a push to the right. The pattern above means that the jets will push a falling rock right, then right, then right, then left, then left, then right, and so on. If the end of the list is reached, it repeats.
-
-The tall, vertical chamber is exactly seven units wide. Each rock appears so that its left edge is two units away from the left wall and its bottom edge is three units above the highest rock in the room (or the floor, if there isn't one).
-
-After a rock appears, it alternates between being pushed by a jet of hot gas one unit (in the direction indicated by the next symbol in the jet pattern) and then falling one unit down. If any movement would cause any part of the rock to move into the walls, floor, or a stopped rock, the movement instead does not occur. If a downward movement would have caused a falling rock to move into the floor or an already-fallen rock, the falling rock stops where it is (having landed on something) and a new rock immediately begins falling.
-
-Drawing falling rocks with `@` and stopped rocks with `#`, the jet pattern in the example above manifests as follows:
-
-```
-The first rock begins falling:
-|..@@@@.|
-|.......|
-|.......|
-|.......|
-+-------+
-
-Jet of gas pushes rock right:
-|...@@@@|
-|.......|
-|.......|
-|.......|
-+-------+
-
-Rock falls 1 unit:
-|...@@@@|
-|.......|
-|.......|
-+-------+
-
-Jet of gas pushes rock right, but nothing happens:
-|...@@@@|
-|.......|
-|.......|
-+-------+
-
-Rock falls 1 unit:
-|...@@@@|
-|.......|
-+-------+
-
-Jet of gas pushes rock right, but nothing happens:
-|...@@@@|
-|.......|
-+-------+
-
-Rock falls 1 unit:
-|...@@@@|
-+-------+
-
-Jet of gas pushes rock left:
-|..@@@@.|
-+-------+
-
-Rock falls 1 unit, causing it to come to rest:
-|..####.|
-+-------+
-
-A new rock begins falling:
-|...@...|
-|..@@@..|
-|...@...|
-|.......|
-|.......|
-|.......|
-|..####.|
-+-------+
-
-Jet of gas pushes rock left:
-|..@....|
-|.@@@...|
-|..@....|
-|.......|
-|.......|
-|.......|
-|..####.|
-+-------+
-
-Rock falls 1 unit:
-|..@....|
-|.@@@...|
-|..@....|
-|.......|
-|.......|
-|..####.|
-+-------+
-
-Jet of gas pushes rock right:
-|...@...|
-|..@@@..|
-|...@...|
-|.......|
-|.......|
-|..####.|
-+-------+
-
-Rock falls 1 unit:
-|...@...|
-|..@@@..|
-|...@...|
-|.......|
-|..####.|
-+-------+
-
-Jet of gas pushes rock left:
-|..@....|
-|.@@@...|
-|..@....|
-|.......|
-|..####.|
-+-------+
-
-Rock falls 1 unit:
-|..@....|
-|.@@@...|
-|..@....|
-|..####.|
-+-------+
-
-Jet of gas pushes rock right:
-|...@...|
-|..@@@..|
-|...@...|
-|..####.|
-+-------+
-
-Rock falls 1 unit, causing it to come to rest:
-|...#...|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-A new rock begins falling:
-|....@..|
-|....@..|
-|..@@@..|
-|.......|
-|.......|
-|.......|
-|...#...|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-The moment each of the next few rocks begins falling, you would see this:
-
-|..@....|
-|..@....|
-|..@....|
-|..@....|
-|.......|
-|.......|
-|.......|
-|..#....|
-|..#....|
-|####...|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|..@@...|
-|..@@...|
-|.......|
-|.......|
-|.......|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|..@@@@.|
-|.......|
-|.......|
-|.......|
-|....##.|
-|....##.|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|...@...|
-|..@@@..|
-|...@...|
-|.......|
-|.......|
-|.......|
-|.####..|
-|....##.|
-|....##.|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|....@..|
-|....@..|
-|..@@@..|
-|.......|
-|.......|
-|.......|
-|..#....|
-|.###...|
-|..#....|
-|.####..|
-|....##.|
-|....##.|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|..@....|
-|..@....|
-|..@....|
-|..@....|
-|.......|
-|.......|
-|.......|
-|.....#.|
-|.....#.|
-|..####.|
-|.###...|
-|..#....|
-|.####..|
-|....##.|
-|....##.|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|..@@...|
-|..@@...|
-|.......|
-|.......|
-|.......|
-|....#..|
-|....#..|
-|....##.|
-|....##.|
-|..####.|
-|.###...|
-|..#....|
-|.####..|
-|....##.|
-|....##.|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-
-|..@@@@.|
-|.......|
-|.......|
-|.......|
-|....#..|
-|....#..|
-|....##.|
-|##..##.|
-|######.|
-|.###...|
-|..#....|
-|.####..|
-|....##.|
-|....##.|
-|....#..|
-|..#.#..|
-|..#.#..|
-|#####..|
-|..###..|
-|...#...|
-|..####.|
-+-------+
-```
-To prove to the elephants your simulation is accurate, they want to know how tall the tower will get after `2022` rocks have stopped (but before the 2023rd rock begins falling). In this example, the tower of rocks will be `3068` units tall.
-
-How many units tall will the tower of rocks be after `2022` rocks have stopped falling?
-
+Consider your entire calibration document. What is the sum of all of the calibration values?
 
 ## Part Two
-The elephants are not impressed by your simulation. They demand to know how tall the tower will be after `1000000000000` rocks have stopped! Only then will they feel confident enough to proceed through the cave.
+Your calculation isn't quite right. It looks like some of the digits are actually spelled out with letters: one, two, three, four, five, six, seven, eight, and nine also count as valid "digits".
 
-In the example above, the tower would be `1514285714288` units tall!
+Equipped with this new information, you now need to find the real first and last digit on each line. For example:
+```
+two1nine
+eightwothree
+abcone2threexyz
+xtwone3four
+4nineeightseven2
+zoneight234
+7pqrstsixteen
+```
+In this example, the calibration values are `29`, `83`, `13`, `24`, `42`, `14`, and `76`. Adding these together produces `281`.
 
-How tall will the tower be after `1000000000000` rocks have stopped?
+What is the sum of all of the calibration values?
