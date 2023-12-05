@@ -2,48 +2,64 @@ use std::fs;
 use regex::Regex;
 
 
+#[derive(Debug, Clone)]
+struct Set {
+    red: i32,
+    green: i32,
+    blue: i32,
+}
+impl Set {
+    fn new(line: &str) -> Self {
+        let re_red = Regex::new(r"(\d+) red").unwrap();
+        let re_green = Regex::new(r"(\d+) green").unwrap();
+        let re_blue = Regex::new(r"(\d+) blue").unwrap();
+
+        let red = re_red.captures(line).map_or(0, |el| el.get(1).unwrap().as_str().parse::<i32>().unwrap());
+        let green = re_green.captures(line).map_or(0, |el| el.get(1).unwrap().as_str().parse::<i32>().unwrap());
+        let blue = re_blue.captures(line).map_or(0, |el| el.get(1).unwrap().as_str().parse::<i32>().unwrap());
+
+        Self {
+            red,
+            green,
+            blue
+        }
+    }
+    fn power(&self) -> i32 {
+        return self.red * self.green * self.blue;
+    }
+    fn reduce(a: Self, b: Self) -> Self {
+        Self {
+            red: a.red.max(b.red),
+            green: a.green.max(b.green),
+            blue: a.blue.max(b.blue)
+        }
+    }
+}
+
 #[derive(Debug)]
-struct CalibrationLine(Vec<u32>);
-impl CalibrationLine {
-    fn new(line: &str, replace: bool) -> Self {
-        let mut numbers = Vec::new();
-        let re = Regex::new(r"(\d|one|two|three|four|five|six|seven|eight|nine)").unwrap();
-        let mut start = 0;
-        while let Some(mat) = re.find_at(line, start) {
-            start += 1;
-            if mat.len() > 1 {
-                if replace {
-                    numbers.push(match mat.as_str() {
-                        "one" => 1,
-                        "two" => 2,
-                        "three" => 3,
-                        "four" => 4,
-                        "five" => 5,
-                        "six" => 6,
-                        "seven" => 7,
-                        "eight" => 8,
-                        "nine" => 9,
-                        _ => panic!("{}", mat.as_str())
-                    });
-                }
-            }
-            else {
-                //println!("{}", mat.as_str());
-                numbers.push(mat.as_str().parse::<u32>().unwrap());
-            }
-        };
-        
-        CalibrationLine(numbers)
+struct Game {
+    id: i32,
+    sets: Vec<Set>
+}
+impl Game {
+    fn new(line: &str) -> Self {
+        let re_game = Regex::new(r"Game (\d+): ").unwrap();
+
+        let id = re_game.captures(line).unwrap().get(1).unwrap().as_str().parse::<i32>().unwrap();
+        let line = re_game.replace(line, "").to_string();
+
+        Self {
+            id: id,
+            sets: line.split(";").map(|el| Set::new(el)).collect()
+        }
     }
-    fn get_first_digit(&self) -> u32 {
-        *self.0.first().unwrap()
+
+    fn is_possible(&self, red: i32, green: i32, blue: i32) -> bool {
+        self.sets.iter().all(|el| el.red <= red && el.green <= green && el.blue <= blue)
     }
-    fn get_last_digit(&self) -> u32 {
-        *self.0.last().unwrap()
-        //self.0.chars().filter(char::is_ascii_digit).next_back().unwrap().to_digit(10).unwrap()
-    }
-    fn get_value(&self) -> u32 {
-        self.get_first_digit()*10 + self.get_last_digit()
+
+    fn get_minimal_set(&self) -> Set {
+        self.sets.iter().cloned().reduce(Set::reduce).unwrap()
     }
 }
 
@@ -52,34 +68,33 @@ impl CalibrationLine {
 fn main() {
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
 
-    let res = input.split('\n').map(|el| CalibrationLine::new(el, false)).map(|el| el.get_value()).sum::<u32>();
-    println!("The calibration value is {}", res);
+    let games = input.split("\n").map(|el| Game::new(el));
+    let sum: i32 = games.clone().filter(|el| el.is_possible(12, 13, 14)).map(|el| el.id).sum();
 
-    let res2 = input.split('\n').map(|el| CalibrationLine::new(el, true)).map(|el| el.get_value()).sum::<u32>();
-    println!("The correct calibration value is {}", res2);
+    println!("The sum is {}", sum);
+
+    let sum2: i32 = games.map(|el| el.get_minimal_set()).map(|el| el.power()).sum();
+    println!("The sum for the minimal games is {}", sum2);
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::CalibrationLine;
-
+    use crate::Game;
 
     #[test]
     fn check_against_example() {
-        let mut input = "1abc2
-pqr3stu8vwx
-a1b2c3d4e5f
-treb7uchet";
-        assert_eq!(input.split('\n').map(|el| CalibrationLine::new(el, false)).map(|el| el.get_value()).sum::<u32>(), 142);
+        let input = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
+Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
+Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
+Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
+Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
 
-        input = "two1nine
-eightwothree
-abcone2threexyz
-xtwone3four
-4nineeightseven2
-zoneight234
-7pqrstsixteen";
-        assert_eq!(input.split('\n').map(|el| CalibrationLine::new(el, true)).map(|el| el.get_value()).sum::<u32>(), 281);
+        let games = input.split("\n").map(|el| Game::new(el));
+        let sum: i32 = games.clone().filter(|el| el.is_possible(12, 13, 14)).map(|el| el.id).sum();
+        assert_eq!(sum, 8);
+
+        let sum2: i32 = games.map(|el| el.get_minimal_set()).map(|el| el.power()).sum();
+        assert_eq!(sum2, 2286);
     }
 }
