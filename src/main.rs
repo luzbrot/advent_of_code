@@ -1,65 +1,89 @@
 use std::fs;
-use regex::Regex;
 
-
-#[derive(Debug, Clone)]
-struct Set {
-    red: i32,
-    green: i32,
-    blue: i32,
+#[derive(Debug)]
+enum Type {
+    Number(u32),
+    Space,
+    Symbol(char)
 }
-impl Set {
-    fn new(line: &str) -> Self {
-        let re_red = Regex::new(r"(\d+) red").unwrap();
-        let re_green = Regex::new(r"(\d+) green").unwrap();
-        let re_blue = Regex::new(r"(\d+) blue").unwrap();
-
-        let red = re_red.captures(line).map_or(0, |el| el.get(1).unwrap().as_str().parse::<i32>().unwrap());
-        let green = re_green.captures(line).map_or(0, |el| el.get(1).unwrap().as_str().parse::<i32>().unwrap());
-        let blue = re_blue.captures(line).map_or(0, |el| el.get(1).unwrap().as_str().parse::<i32>().unwrap());
-
-        Self {
-            red,
-            green,
-            blue
-        }
-    }
-    fn power(&self) -> i32 {
-        return self.red * self.green * self.blue;
-    }
-    fn reduce(a: Self, b: Self) -> Self {
-        Self {
-            red: a.red.max(b.red),
-            green: a.green.max(b.green),
-            blue: a.blue.max(b.blue)
+impl From<char> for Type {
+    fn from(value: char) -> Self {
+        match value {
+            '.' => Self::Space,
+            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => Self::Number(value.to_digit(10).unwrap()),
+            _ => Self::Symbol(value)
         }
     }
 }
 
 #[derive(Debug)]
-struct Game {
-    id: i32,
-    sets: Vec<Set>
+struct Schematic {
+    width: usize,
+    plan: Vec<Type>
 }
-impl Game {
-    fn new(line: &str) -> Self {
-        let re_game = Regex::new(r"Game (\d+): ").unwrap();
-
-        let id = re_game.captures(line).unwrap().get(1).unwrap().as_str().parse::<i32>().unwrap();
-        let line = re_game.replace(line, "").to_string();
-
+impl Schematic {
+    fn new(input: &str) -> Self {
         Self {
-            id: id,
-            sets: line.split(";").map(|el| Set::new(el)).collect()
+            width: input.find('\n').unwrap(),
+            plan: input.chars().into_iter().filter(|el| !el.is_ascii_whitespace()).map(|el| el.into()).collect()
         }
     }
 
-    fn is_possible(&self, red: i32, green: i32, blue: i32) -> bool {
-        self.sets.iter().all(|el| el.red <= red && el.green <= green && el.blue <= blue)
+    fn get_height(&self) -> usize {
+        self.plan.len() / self.width
     }
 
-    fn get_minimal_set(&self) -> Set {
-        self.sets.iter().cloned().reduce(Set::reduce).unwrap()
+    fn find_relevant_parts(&self) -> Vec<u32> {
+        let mut res = Vec::new();
+
+        for y in 0..self.get_height() {
+            let mut number: u32 = 0;
+            let mut relevant = false;
+            for x in 0..self.width {
+                match self.plan[self.width * y + x] {
+                    Type::Number(n) => {
+                        number = number * 10 + n;
+                        if self.is_near_symbol(x, y) {
+                            relevant = true;
+                        }
+                    },
+                    Type::Space | Type::Symbol(_) => {
+                        if number > 0 {
+                            if relevant {
+                                res.push(number);
+                            }
+                            number = 0;
+                            relevant = false;
+                        }
+                    }
+                }
+            }
+            if number > 0 {
+                if relevant {
+                    res.push(number);
+                }
+            }
+        }
+
+        res
+    }
+
+    fn is_near_symbol(&self, x: usize, y: usize) -> bool {
+        let ym = if y > 0 { y - 1 } else { 0 };
+        let yp = if y >= self.get_height() - 1 { self.get_height() - 1 } else { y + 1 };
+        for yi in ym..yp+1 {
+            let xm = if x > 0 { x - 1 } else { 0 };
+            let xp = if x >= self.width - 1 { self.width - 1 } else { x + 1 };
+            for xi in xm..xp+1 {
+                if xi == x && yi == y { continue; }
+                match self.plan[self.width * yi + xi] {
+                    Type::Symbol(_) => return true,
+                    _ => continue
+                }
+            }
+        }
+
+        false
     }
 }
 
@@ -68,33 +92,29 @@ impl Game {
 fn main() {
     let input = fs::read_to_string("input").unwrap_or_else(|_| panic!("Unable to read input"));
 
-    let games = input.split("\n").map(|el| Game::new(el));
-    let sum: i32 = games.clone().filter(|el| el.is_possible(12, 13, 14)).map(|el| el.id).sum();
-
-    println!("The sum is {}", sum);
-
-    let sum2: i32 = games.map(|el| el.get_minimal_set()).map(|el| el.power()).sum();
-    println!("The sum for the minimal games is {}", sum2);
+    let schema = Schematic::new(input.as_str());
+    println!("The sum is {}", schema.find_relevant_parts().iter().sum::<u32>());
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::Game;
+    use crate::*;
 
     #[test]
     fn check_against_example() {
-        let input = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
-Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
-Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
-Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
-Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
+        let input = "467..114..
+...*......
+..35..633.
+......#...
+617*......
+.....+.58.
+..592.....
+......755.
+...$.*....
+.664.598..";
 
-        let games = input.split("\n").map(|el| Game::new(el));
-        let sum: i32 = games.clone().filter(|el| el.is_possible(12, 13, 14)).map(|el| el.id).sum();
-        assert_eq!(sum, 8);
-
-        let sum2: i32 = games.map(|el| el.get_minimal_set()).map(|el| el.power()).sum();
-        assert_eq!(sum2, 2286);
+        let schema = Schematic::new(input);
+        assert_eq!(schema.find_relevant_parts().iter().sum::<u32>(), 4361);
     }
 }
